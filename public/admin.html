@@ -108,87 +108,120 @@
                 alert('密码错误！');
                 location.reload();
             }
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text);
+            }
             return res;
         }
 
         async function fetchOrders() {
-            const res = await api('/api/orders');
-            const data = await res.json();
-            document.getElementById('orders-list').innerHTML = data.map(o => `
-                <tr>
-                    <td>${o.Id}</td><td>${o.CustomerName}</td><td>${o.ItemSummary}</td><td>¥${o.TotalPrice.toFixed(2)}</td>
-                    <td class="status-${o.Status}">${o.Status}</td>
-                    <td>
-                        ${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">完成</button>` : ''}
-                        ${o.Status === 'Pending' ? `<button class="danger" onclick="cancelOrder(${o.Id})">取消</button>` : ''}
-                    </td>
-                </tr>
-            `).join('');
+            try {
+                const res = await api('/api/orders');
+                const data = await res.json();
+                document.getElementById('orders-list').innerHTML = data.map(o => `
+                    <tr>
+                        <td>${o.Id}</td><td>${o.CustomerName}</td><td>${o.ItemSummary}</td><td>¥${o.TotalPrice.toFixed(2)}</td>
+                        <td class="status-${o.Status}">${o.Status}</td>
+                        <td>
+                            ${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">完成</button>` : ''}
+                            ${o.Status === 'Pending' ? `<button class="danger" onclick="cancelOrder(${o.Id})">取消</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Fetch orders error:', e);
+            }
         }
 
         async function exportOrders() {
-            const res = await fetch('/api/admin/orders/export', {
-                headers: { 'x-admin-password': adminPassword }
-            });
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `orders_${new Date().toLocaleDateString()}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+            try {
+                const res = await fetch('/api/admin/orders/export', {
+                    headers: { 'x-admin-password': adminPassword }
+                });
+                if (!res.ok) throw new Error('导出失败');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `orders_${new Date().toLocaleDateString()}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } catch (e) { alert(e.message); }
         }
 
         async function clearAllOrders() {
             if (!confirm('确定清空所有订单记录吗？此操作不可恢复！')) return;
-            await api('/api/admin/orders', 'DELETE');
-            refreshAll();
+            try {
+                await api('/api/admin/orders', 'DELETE');
+                refreshAll();
+            } catch (e) { alert('清销失败: ' + e.message); }
         }
 
         async function cancelOrder(id) {
             if (!confirm('确定取消该订单吗？')) return;
-            await api(`/api/orders/${id}`, 'PUT', { status: 'Cancelled' });
-            fetchOrders();
+            try {
+                await api(`/api/orders/${id}`, 'PUT', { status: 'Cancelled' });
+                fetchOrders();
+            } catch (e) { alert('操作失败: ' + e.message); }
         }
 
         async function fetchMenu() {
-            const res = await api('/api/admin/menu'); 
-            const data = await res.json();
-            document.getElementById('menu-list').innerHTML = data.map(m => `
-                <tr>
-                    <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description}</td>
-                    <td style="color: ${m.IsAvailable ? 'green' : 'red'}">${m.IsAvailable ? '在售' : '已下架'}</td>
-                    <td>
-                        <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price})">${m.IsAvailable ? '下架' : '上架'}</button>
-                        <button class="danger" onclick="deleteMenu(${m.Id})">从列表删除</button>
-                    </td>
-                </tr>
-            `).join('');
+            try {
+                const res = await api('/api/admin/menu'); 
+                const data = await res.json();
+                document.getElementById('menu-list').innerHTML = data.map(m => `
+                    <tr>
+                        <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description}</td>
+                        <td style="color: ${m.IsAvailable ? 'green' : 'red'}">${m.IsAvailable ? '在售' : '已下架'}</td>
+                        <td>
+                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price})">${m.IsAvailable ? '下架' : '上架'}</button>
+                            <button class="danger" onclick="deleteMenu(${m.Id})">从列表删除</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Fetch menu error:', e);
+            }
         }
 
         async function completeOrder(id) {
-            await api(`/api/orders/${id}`, 'PUT', { status: 'Completed' });
-            fetchOrders();
+            try {
+                await api(`/api/orders/${id}`, 'PUT', { status: 'Completed' });
+                fetchOrders();
+            } catch (e) { alert('操作失败: ' + e.message); }
         }
 
         async function addMenuItem() {
-            const name = document.getElementById('m-name').value;
-            const price = document.getElementById('m-price').value;
-            const description = document.getElementById('m-desc').value;
-            await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee' });
-            fetchMenu();
+            try {
+                const name = document.getElementById('m-name').value;
+                const price = document.getElementById('m-price').value;
+                const description = document.getElementById('m-desc').value;
+                if (!name || !price) return alert('请填写名称和价格');
+                await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee' });
+                fetchMenu();
+                document.getElementById('m-name').value = '';
+                document.getElementById('m-price').value = '';
+                document.getElementById('m-desc').value = '';
+            } catch (e) { alert('添加失败: ' + e.message); }
         }
 
         async function toggleMenu(id, currentStatus, name, price) {
-            await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus });
-            fetchMenu();
+            try {
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus });
+                fetchMenu();
+            } catch (e) { alert('操作失败: ' + e.message); }
         }
 
         async function deleteMenu(id) {
-            if (confirm('确定删除吗？')) {
-                await api(`/api/admin/menu/${id}`, 'DELETE');
-                fetchMenu();
+            if (confirm('确定删除吗？（如果该咖啡已有订单记录，删除可能会失败，建议使用“下架”）')) {
+                try {
+                    await api(`/api/admin/menu/${id}`, 'DELETE');
+                    fetchMenu();
+                } catch (e) {
+                    alert('删除失败：此商品可能已有历史点单关联，数据库禁止删除。请点击“下架”来隐藏它。');
+                }
             }
         }
 
