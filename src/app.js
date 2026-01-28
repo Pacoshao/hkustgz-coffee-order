@@ -12,12 +12,17 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // API: Get Menu Items
 app.get('/api/menu', async (req, res) => {
+    console.log('GET /api/menu request received');
     try {
         const pool = await poolPromise;
+        if (!pool) throw new Error('Database pool not initialized');
+        
         const result = await pool.request().query('SELECT * FROM MenuItems WHERE IsAvailable = 1');
+        console.log(`Successfully fetched ${result.recordset.length} menu items`);
         res.json(result.recordset);
     } catch (err) {
-        res.status(500).send(err.message);
+        console.error('Error fetching menu:', err.message);
+        res.status(500).json({ error: err.message });
     }
 });
 

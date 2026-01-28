@@ -37,9 +37,18 @@
         let menuData = [];
 
         async function fetchMenu() {
-            const res = await fetch('/api/menu');
-            menuData = await res.json();
-            renderMenu();
+            try {
+                const res = await fetch('/api/menu');
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '服务器错误');
+                }
+                menuData = await res.json();
+                renderMenu();
+            } catch (err) {
+                document.getElementById('menu').innerHTML = `<p style="color:red">加载失败: ${err.message}</p>`;
+                console.error(err);
+            }
         }
 
         function renderMenu() {
