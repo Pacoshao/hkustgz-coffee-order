@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>管理后台 - 结单系统</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 12px; text-align: left; }
+        .status-Pending { color: #f39c12; font-weight: bold; }
+        .status-Completed { color: #27ae60; }
+        button.complete { background: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>📋 待处理订单</h1>
+    <button onclick="fetchOrders()">刷新订单</button>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>顾客</th>
+                <th>内容</th>
+                <th>金额</th>
+                <th>状态</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="orders-list"></tbody>
+    </table>
+
+    <script>
+        async function fetchOrders() {
+            const res = await fetch('/api/orders');
+            const orders = await res.json();
+            const list = document.getElementById('orders-list');
+            list.innerHTML = orders.map(o => `
+                <tr>
+                    <td>${o.Id}</td>
+                    <td>${o.CustomerName}</td>
+                    <td>${o.ItemSummary}</td>
+                    <td>¥${o.TotalPrice.toFixed(2)}</td>
+                    <td class="status-${o.Status}">${o.Status}</td>
+                    <td>
+                        ${o.Status === 'Pending' ? `<button class="complete" onclick="completeOrder(${o.Id})">结单</button>` : '—'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function completeOrder(id) {
+            await fetch(`/api/orders/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'Completed' })
+            });
+            fetchOrders();
+        }
+
+        fetchOrders();
+        setInterval(fetchOrders, 10000); // 10秒自动刷新
+    </script>
+</body>
+</html>
