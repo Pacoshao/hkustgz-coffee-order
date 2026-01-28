@@ -40,13 +40,20 @@
             try {
                 const res = await fetch('/api/menu');
                 if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || '服务器错误');
+                    const text = await res.text();
+                    let errMsg = '服务器错误';
+                    try {
+                        const json = JSON.parse(text);
+                        errMsg = json.error || errMsg;
+                    } catch(e) {
+                        errMsg = text; // If not JSON, show the raw text
+                    }
+                    throw new Error(errMsg);
                 }
                 menuData = await res.json();
                 renderMenu();
             } catch (err) {
-                document.getElementById('menu').innerHTML = `<p style="color:red">加载失败: ${err.message}</p>`;
+                document.getElementById('menu').innerHTML = `<p style="color:red">加载失败: ${err.message.substring(0, 100)}</p>`;
                 console.error(err);
             }
         }

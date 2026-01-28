@@ -8,18 +8,24 @@ const config = {
         type: 'azure-active-directory-default'
     },
     options: {
-        encrypt: true, // For Azure SQL
-        trustServerCertificate: false
+        encrypt: true,
+        trustServerCertificate: false,
+        connectTimeout: 30000
     }
 };
+
+console.log(`Attempting to connect to database: ${config.database} on server: ${config.server}`);
 
 const poolPromise = new sql.ConnectionPool(config)
     .connect()
     .then(pool => {
-        console.log('Connected to Azure SQL');
+        console.log('Connected to Azure SQL successfully');
         return pool;
     })
-    .catch(err => console.log('Database Connection Failed! Bad Config: ', err));
+    .catch(err => {
+        console.error('Database Connection Error:', err.message);
+        throw err; // Re-throw so poolPromise rejects
+    });
 
 module.exports = {
     sql, poolPromise
