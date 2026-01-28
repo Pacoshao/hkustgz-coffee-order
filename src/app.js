@@ -10,7 +10,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// API: Get Menu Items
+// Admin Authentication Middleware
+const adminAuth = (req, res, next) => {
+    const password = req.headers['x-admin-password'];
+    if (password === process.env.ADMIN_PASSWORD) {
+        next();
+    } else {
+        res.status(401).send('Unauthorized: Invalid Password');
+    }
+};
+
+// API: Get Menu Items (Public)
 app.get('/api/menu', async (req, res) => {
     try {
         const pool = await poolPromise;
@@ -60,8 +70,8 @@ app.post('/api/orders', async (req, res) => {
     }
 });
 
-// API: Get all orders (Management)
-app.get('/api/orders', async (req, res) => {
+// API: Get all orders (Management) - Protected
+app.get('/api/orders', adminAuth, async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -79,8 +89,8 @@ app.get('/api/orders', async (req, res) => {
     }
 });
 
-// API: Complete an Order
-app.put('/api/orders/:id', async (req, res) => {
+// API: Complete an Order - Protected
+app.put('/api/orders/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     try {
@@ -90,6 +100,59 @@ app.put('/api/orders/:id', async (req, res) => {
             .input('status', sql.NVarChar, status)
             .query('UPDATE Orders SET Status = @status WHERE Id = @id');
         res.send('Order status updated');
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+/** Menu Management (Admin Only) **/
+
+// Add Menu Item
+app.post('/api/admin/menu', adminAuth, async (req, res) => {
+    const { name, price, description, category } = req.body;
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('name', sql.NVarChar, name)
+            .input('price', sql.Decimal(10, 2), price)
+            .input('description', sql.NVarChar, description)
+            .input('category', sql.NVarChar, category)
+            .query('INSERT INTO MenuItems (Name, Price, Description, Category) VALUES (@name, @price, @description, @category)');
+        res.status(201).send('Item added');
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+// Update Menu Item
+app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
+    const { id } = req.params;
+    const { name, price, description, category, isAvailable } = req.body;
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, id)
+            .input('name', sql.NVarChar, name)
+            .input('price', sql.Decimal(10, 2), price)
+            .input('description', sql.NVarChar, description)
+            .input('category', sql.NVarChar, category)
+            .input('isAvailable', sql.Bit, isAvailable)
+            .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable WHERE Id = @id');
+        res.send('Item updated');
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+// Delete Menu Item
+app.delete('/api/admin/menu/:id', adminAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM MenuItems WHERE Id = @id');
+        res.send('Item deleted');
     } catch (err) {
         res.status(500).send(err.message);
     }

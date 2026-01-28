@@ -2,63 +2,167 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>管理后台 - 结单系统</title>
+    <title>HKUST(GZ) 咖啡系统 - 后台管理</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        body { font-family: sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1, h2 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #ddd; padding: 12px; text-align: left; }
         .status-Pending { color: #f39c12; font-weight: bold; }
         .status-Completed { color: #27ae60; }
-        button.complete { background: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        button { padding: 6px 12px; cursor: pointer; border-radius: 4px; border: 1px solid #ddd; }
+        button.primary { background: #0071e3; color: white; border: none; }
+        button.danger { background: #ff3b30; color: white; border: none; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { padding: 10px 20px; background: #ddd; border: none; cursor: pointer; }
+        .tab-btn.active { background: #0071e3; color: white; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 8px; margin-right: 5px; }
     </style>
 </head>
 <body>
-    <h1>📋 待处理订单</h1>
-    <button onclick="fetchOrders()">刷新订单</button>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>顾客</th>
-                <th>内容</th>
-                <th>金额</th>
-                <th>状态</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody id="orders-list"></tbody>
-    </table>
+    <div id="login-overlay">
+        <div class="card">
+            <h2>管理员登录</h2>
+            <input type="password" id="admin-pw-input" placeholder="输入后台密码" style="padding:10px; width:200px">
+            <button class="primary" onclick="login()">进入</button>
+        </div>
+    </div>
+
+    <h1>☕ HKUST(GZ) 咖啡后台</h1>
+    
+    <div class="tabs">
+        <button id="tab-orders" class="tab-btn active" onclick="showTab('orders')">点单处理</button>
+        <button id="tab-menu" class="tab-btn" onclick="showTab('menu')">菜单管理</button>
+    </div>
+
+    <!-- 点单管理 -->
+    <div id="section-orders" class="card">
+        <h2>📋 待处理订单</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th><th>顾客</th><th>内容</th><th>金额</th><th>状态</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="orders-list"></tbody>
+        </table>
+    </div>
+
+    <!-- 菜单管理 -->
+    <div id="section-menu" class="card" style="display:none">
+        <h2>🍔 菜单管理</h2>
+        <div class="card" style="background: #f9f9f9">
+            <h3>添加新品</h3>
+            <div class="form-group">
+                <input type="text" id="m-name" placeholder="名称">
+                <input type="number" id="m-price" placeholder="价格">
+                <input type="text" id="m-desc" placeholder="描述">
+                <button class="primary" onclick="addMenuItem()">添加</button>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>名称</th><th>价格</th><th>描述</th><th>库存状态</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="menu-list"></tbody>
+        </table>
+    </div>
 
     <script>
+        let adminPassword = '';
+
+        function login() {
+            adminPassword = document.getElementById('admin-pw-input').value;
+            if (!adminPassword) return;
+            document.getElementById('login-overlay').style.display = 'none';
+            refreshAll();
+        }
+
+        function showTab(tab) {
+            document.getElementById('section-orders').style.display = tab === 'orders' ? 'block' : 'none';
+            document.getElementById('section-menu').style.display = tab === 'menu' ? 'block' : 'none';
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+        }
+
+        async function api(path, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }
+            };
+            if (body) options.body = JSON.stringify(body);
+            const res = await fetch(path, options);
+            if (res.status === 401) {
+                alert('密码错误！');
+                location.reload();
+            }
+            return res;
+        }
+
         async function fetchOrders() {
-            const res = await fetch('/api/orders');
-            const orders = await res.json();
-            const list = document.getElementById('orders-list');
-            list.innerHTML = orders.map(o => `
+            const res = await api('/api/orders');
+            const data = await res.json();
+            document.getElementById('orders-list').innerHTML = data.map(o => `
                 <tr>
-                    <td>${o.Id}</td>
-                    <td>${o.CustomerName}</td>
-                    <td>${o.ItemSummary}</td>
-                    <td>¥${o.TotalPrice.toFixed(2)}</td>
+                    <td>${o.Id}</td><td>${o.CustomerName}</td><td>${o.ItemSummary}</td><td>¥${o.TotalPrice.toFixed(2)}</td>
                     <td class="status-${o.Status}">${o.Status}</td>
+                    <td>${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">结单</button>` : ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function fetchMenu() {
+            const res = await fetch('/api/menu'); 
+            const data = await res.json();
+            document.getElementById('menu-list').innerHTML = data.map(m => `
+                <tr>
+                    <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description}</td>
+                    <td>${m.IsAvailable ? '在售' : '估清'}</td>
                     <td>
-                        ${o.Status === 'Pending' ? `<button class="complete" onclick="completeOrder(${o.Id})">结单</button>` : '—'}
+                        <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price})">${m.IsAvailable ? '下架' : '上架'}</button>
+                        <button class="danger" onclick="deleteMenu(${m.Id})">删除</button>
                     </td>
                 </tr>
             `).join('');
         }
 
         async function completeOrder(id) {
-            await fetch(`/api/orders/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'Completed' })
-            });
+            await api(`/api/orders/${id}`, 'PUT', { status: 'Completed' });
             fetchOrders();
         }
 
-        fetchOrders();
-        setInterval(fetchOrders, 10000); // 10秒自动刷新
+        async function addMenuItem() {
+            const name = document.getElementById('m-name').value;
+            const price = document.getElementById('m-price').value;
+            const description = document.getElementById('m-desc').value;
+            await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee' });
+            fetchMenu();
+        }
+
+        async function toggleMenu(id, currentStatus, name, price) {
+            await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus });
+            fetchMenu();
+        }
+
+        async function deleteMenu(id) {
+            if (confirm('确定删除吗？')) {
+                await api(`/api/admin/menu/${id}`, 'DELETE');
+                fetchMenu();
+            }
+        }
+
+        function refreshAll() {
+            fetchOrders();
+            fetchMenu();
+        }
+
+        setInterval(() => { if(adminPassword) fetchOrders(); }, 10000);
     </script>
 </body>
 </html>
