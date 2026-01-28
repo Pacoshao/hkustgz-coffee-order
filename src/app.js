@@ -34,7 +34,7 @@ app.get('/api/menu', async (req, res) => {
 
 // API: Place an Order
 app.post('/api/orders', async (req, res) => {
-    const { customerName, items, totalPrice } = req.body;
+    const { code, items, totalPrice } = req.body;
     try {
         const pool = await poolPromise;
         const transaction = new sql.Transaction(pool);
@@ -43,9 +43,9 @@ app.post('/api/orders', async (req, res) => {
         try {
             const request = new sql.Request(transaction);
             const orderResult = await request
-                .input('customerName', sql.NVarChar, customerName)
+                .input('code', sql.NVarChar, code)
                 .input('totalPrice', sql.Decimal(10, 2), totalPrice)
-                .query('INSERT INTO Orders (CustomerName, TotalPrice, Status) OUTPUT INSERTED.Id VALUES (@customerName, @totalPrice, \'Pending\')');
+                .query('INSERT INTO Orders (CustomerName, TotalPrice, Status) OUTPUT INSERTED.Id VALUES (@code, @totalPrice, \'Pending\')');
 
             const orderId = orderResult.recordset[0].Id;
 
@@ -89,7 +89,7 @@ app.get('/api/orders', adminAuth, async (req, res) => {
     }
 });
 
-// API: Complete an Order - Protected
+// API: Complete/Cancel an Order - Protected
 app.put('/api/orders/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
@@ -100,6 +100,96 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
             .input('status', sql.NVarChar, status)
             .query('UPDATE Orders SET Status = @status WHERE Id = @id');
         res.send('Order status updated');
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+// API: Export Orders to CSV - Protected
+app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT o.Id, o.OrderDate, o.CustomerName, o.Status, o.TotalPrice,
+            (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), '; ') 
+             FROM OrderItems oi 
+             JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
+             WHERE oi.OrderId = o.Id) as Items
+            FROM Orders o
+            ORDER BY o.OrderDate DESC
+        `);
+        
+        let csv = 'ID,Date,Code,Items,Total,Status\n';
+        result.recordset.forEach(row => {
+            csv += `${row.Id},${row.OrderDate.toISOString()},"${row.CustomerName}","${row.Items}",${row.TotalPrice},${row.Status}\n`;
+        });
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=orders.csv');
+        res.send(csv);
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+// API: Clear All Orders - Protected
+app.delete('/api/admin/orders', adminAuth, async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        try {
+            await transaction.request().query('DELETE FROM OrderItems');
+            await transaction.request().query('DELETE FROM Orders');
+            await transaction.commit();
+            res.send('All orders cleared');
+        } catch (err) {
+            await transaction.rollback();
+            throw err;
+        }
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+// API: User Cancel their own Order
+app.post('/api/orders/:id/cancel', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('UPDATE Orders SET Status = \'Cancelled\' WHERE Id = @id AND Status = \'Pending\'');
+        
+        if (result.rowsAffected[0] > 0) {
+            res.send('Order cancelled');
+        } else {
+            res.status(400).send('Order cannot be cancelled (might not be pending)');
+        }
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+// API: Public query orders by code
+app.get('/api/public/orders', async (req, res) => {
+    const { code } = req.query;
+    if (!code) return res.status(400).send('Missing code');
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('code', sql.NVarChar, code)
+            .query(`
+                SELECT o.Id, o.OrderDate, o.Status, o.TotalPrice,
+                (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), ', ') 
+                 FROM OrderItems oi 
+                 JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
+                 WHERE oi.OrderId = o.Id) as ItemSummary
+                FROM Orders o
+                WHERE o.CustomerName = @code
+                ORDER BY o.OrderDate DESC
+            `);
+        res.json(result.recordset);
     } catch (err) {
         res.status(500).send(err.message);
     }

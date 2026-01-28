@@ -41,11 +41,17 @@
 
     <!-- 点单管理 -->
     <div id="section-orders" class="card">
-        <h2>📋 待处理订单</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>📋 点单记录</h2>
+            <div>
+                <button class="primary" onclick="exportOrders()">导出 CSV</button>
+                <button class="danger" onclick="clearAllOrders()">清空所有记录</button>
+            </div>
+        </div>
         <table>
             <thead>
                 <tr>
-                    <th>ID</th><th>顾客</th><th>内容</th><th>金额</th><th>状态</th><th>操作</th>
+                    <th>ID</th><th>点单暗号</th><th>内容</th><th>金额</th><th>状态</th><th>操作</th>
                 </tr>
             </thead>
             <tbody id="orders-list"></tbody>
@@ -112,9 +118,38 @@
                 <tr>
                     <td>${o.Id}</td><td>${o.CustomerName}</td><td>${o.ItemSummary}</td><td>¥${o.TotalPrice.toFixed(2)}</td>
                     <td class="status-${o.Status}">${o.Status}</td>
-                    <td>${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">结单</button>` : ''}</td>
+                    <td>
+                        ${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">完成</button>` : ''}
+                        ${o.Status === 'Pending' ? `<button class="danger" onclick="cancelOrder(${o.Id})">取消</button>` : ''}
+                    </td>
                 </tr>
             `).join('');
+        }
+
+        async function exportOrders() {
+            const res = await fetch('/api/admin/orders/export', {
+                headers: { 'x-admin-password': adminPassword }
+            });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `orders_${new Date().toLocaleDateString()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        async function clearAllOrders() {
+            if (!confirm('确定清空所有订单记录吗？此操作不可恢复！')) return;
+            await api('/api/admin/orders', 'DELETE');
+            refreshAll();
+        }
+
+        async function cancelOrder(id) {
+            if (!confirm('确定取消该订单吗？')) return;
+            await api(`/api/orders/${id}`, 'PUT', { status: 'Cancelled' });
+            fetchOrders();
         }
 
         async function fetchMenu() {

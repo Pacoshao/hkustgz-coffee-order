@@ -27,8 +27,15 @@
         <div id="cart-items"></div>
         <hr>
         <p>总计: <span id="total-price">0.00</span> 元</p>
-        <input type="text" id="customer-name" placeholder="输入你的昵称/桌号" style="padding: 8px; width: 200px; margin-right: 10px;">
+        <input type="text" id="customer-code" placeholder="设置你的点单“暗号”" style="padding: 8px; width: 200px; margin-right: 10px;">
         <button onclick="placeOrder()">提交点单</button>
+    </div>
+
+    <div class="cart" style="margin-top:20px; border-top: 1px solid #ddd; background: #eef2f7;">
+        <h3>🔍 找回我的点单</h3>
+        <input type="text" id="search-code" placeholder="输入暗号查看进度" style="padding: 8px; width: 200px; margin-right: 10px;">
+        <button onclick="fetchMyOrdersByCode()">查询/撤单</button>
+        <div id="my-orders-list" style="margin-top: 15px;">输入暗号查进度...</div>
     </div>
 
     <script>
@@ -91,21 +98,60 @@
         }
 
         async function placeOrder() {
-            const name = document.getElementById('customer-name').value;
-            if (!name || cart.length === 0) return alert('请输入名字并选择商品');
+            const code = document.getElementById('customer-code').value;
+            if (!code || cart.length === 0) return alert('请输入暗号并选择商品');
             
             const total = cart.reduce((sum, item) => sum + (item.Price * item.quantity), 0);
             const res = await fetch('/api/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ customerName: name, items: cart, totalPrice: total })
+                body: JSON.stringify({ code: code, items: cart, totalPrice: total })
             });
             
             if (res.ok) {
-                alert('点单成功！请等待叫号。');
+                alert('点单成功！你的暗号是：' + code);
+                document.getElementById('search-code').value = code;
                 cart = [];
                 updateCart();
-                document.getElementById('customer-name').value = '';
+                fetchMyOrdersByCode();
+            }
+        }
+
+        async function fetchMyOrdersByCode() {
+            const code = document.getElementById('search-code').value;
+            if (!code) return;
+            
+            const listDiv = document.getElementById('my-orders-list');
+            try {
+                const res = await fetch(`/api/public/orders?code=${encodeURIComponent(code)}`);
+                const orders = await res.json();
+                
+                if (orders.length === 0) {
+                    listDiv.innerHTML = '未找到该暗号对应的订单。';
+                    return;
+                }
+
+                listDiv.innerHTML = orders.map(o => `
+                    <div style="padding: 10px; border-bottom: 1px solid #ccc; background: white; margin-bottom: 5px; border-radius: 4px;">
+                        <strong>单号 #${o.Id}</strong> [${o.Status === 'Pending' ? '排队中' : o.Status}]<br>
+                        内容: ${o.ItemSummary}<br>
+                        金额: ¥${o.TotalPrice.toFixed(2)}<br>
+                        ${o.Status === 'Pending' ? `<button style="background: #ff3b30; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 5px; cursor: pointer;" onclick="userCancelOrder(${o.Id})">我要撤单</button>` : ''}
+                    </div>
+                `).join('');
+            } catch (e) {
+                listDiv.innerHTML = '查询出错。';
+            }
+        }
+
+        async function userCancelOrder(id) {
+            if (!confirm('确定撤回这张点单吗？')) return;
+            const res = await fetch(`/api/orders/${id}/cancel`, { method: 'POST' });
+            if (res.ok) {
+                alert('点单已撤回');
+                fetchMyOrdersByCode();
+            } else {
+                alert(await res.text());
             }
         }
 
