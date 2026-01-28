@@ -153,15 +153,15 @@
         }
 
         async function fetchMenu() {
-            const res = await fetch('/api/menu'); 
+            const res = await api('/api/admin/menu'); 
             const data = await res.json();
             document.getElementById('menu-list').innerHTML = data.map(m => `
                 <tr>
                     <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description}</td>
-                    <td>${m.IsAvailable ? '在售' : '估清'}</td>
+                    <td style="color: ${m.IsAvailable ? 'green' : 'red'}">${m.IsAvailable ? '在售' : '已下架'}</td>
                     <td>
                         <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price})">${m.IsAvailable ? '下架' : '上架'}</button>
-                        <button class="danger" onclick="deleteMenu(${m.Id})">删除</button>
+                        <button class="danger" onclick="deleteMenu(${m.Id})">从列表删除</button>
                     </td>
                 </tr>
             `).join('');

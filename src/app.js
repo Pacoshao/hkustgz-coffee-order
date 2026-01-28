@@ -197,6 +197,17 @@ app.get('/api/public/orders', async (req, res) => {
 
 /** Menu Management (Admin Only) **/
 
+// Get All Menu Items (Admin Only)
+app.get('/api/admin/menu', adminAuth, async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query('SELECT * FROM MenuItems');
+        res.json(result.recordset);
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
 // Add Menu Item
 app.post('/api/admin/menu', adminAuth, async (req, res) => {
     const { name, price, description, category } = req.body;
