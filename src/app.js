@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { sql, poolPromise } = require('./db');
+const { sql, getPool } = require('./db');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -23,7 +23,7 @@ const adminAuth = (req, res, next) => {
 // API: Get Menu Items (Public)
 app.get('/api/menu', async (req, res) => {
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const result = await pool.request().query('SELECT * FROM MenuItems WHERE IsAvailable = 1');
         res.json(result.recordset);
     } catch (err) {
@@ -36,7 +36,7 @@ app.get('/api/menu', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
     const { code, items, totalPrice } = req.body;
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
 
@@ -73,7 +73,7 @@ app.post('/api/orders', async (req, res) => {
 // API: Get all orders (Management) - Protected
 app.get('/api/orders', adminAuth, async (req, res) => {
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const result = await pool.request().query(`
             SELECT o.Id, o.CustomerName, o.OrderDate, o.Status, o.TotalPrice,
             (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), ', ') 
@@ -94,7 +94,7 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.NVarChar, status)
@@ -108,7 +108,7 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
 // API: Export Orders to CSV - Protected
 app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const result = await pool.request().query(`
             SELECT o.Id, o.OrderDate, o.CustomerName, o.Status, o.TotalPrice,
             (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), '; ') 
@@ -135,7 +135,7 @@ app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
 // API: Clear All Orders - Protected
 app.delete('/api/admin/orders', adminAuth, async (req, res) => {
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
         try {
@@ -156,7 +156,7 @@ app.delete('/api/admin/orders', adminAuth, async (req, res) => {
 app.post('/api/orders/:id/cancel', async (req, res) => {
     const { id } = req.params;
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const result = await pool.request()
             .input('id', sql.Int, id)
             .query('UPDATE Orders SET Status = \'Cancelled\' WHERE Id = @id AND Status = \'Pending\'');
@@ -176,7 +176,7 @@ app.get('/api/public/orders', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).send('Missing code');
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const result = await pool.request()
             .input('code', sql.NVarChar, code)
             .query(`
@@ -200,7 +200,7 @@ app.get('/api/public/orders', async (req, res) => {
 // Get All Menu Items (Admin Only)
 app.get('/api/admin/menu', adminAuth, async (req, res) => {
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         const result = await pool.request().query('SELECT * FROM MenuItems');
         res.json(result.recordset);
     } catch (err) {
@@ -212,7 +212,7 @@ app.get('/api/admin/menu', adminAuth, async (req, res) => {
 app.post('/api/admin/menu', adminAuth, async (req, res) => {
     const { name, price, description, category } = req.body;
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         await pool.request()
             .input('name', sql.NVarChar, name)
             .input('price', sql.Decimal(10, 2), price)
@@ -230,7 +230,7 @@ app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
     const { name, price, description, category, isAvailable } = req.body;
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         await pool.request()
             .input('id', sql.Int, id)
             .input('name', sql.NVarChar, name)
@@ -249,7 +249,7 @@ app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
 app.delete('/api/admin/menu/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
     try {
-        const pool = await poolPromise;
+        const pool = await getPool();
         await pool.request()
             .input('id', sql.Int, id)
             .query('DELETE FROM MenuItems WHERE Id = @id');
