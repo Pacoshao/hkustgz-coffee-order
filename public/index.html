@@ -20,6 +20,8 @@
 <body>
     <h1>☕ HKUST(GZ) Coffee</h1>
     
+    <div id="extra-tip-banner" style="display:none; background: #fff3cd; color: #856404; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ffeeba; white-space: pre-wrap;"></div>
+
     <div id="menu" class="menu-grid">正在加载菜单...</div>
 
     <div class="cart">
@@ -41,6 +43,31 @@
     <script>
         let cart = [];
         let menuData = [];
+        let appSettings = {};
+
+        async function fetchSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                data.forEach(s => {
+                    appSettings[s.SettingKey] = { value: s.SettingValue, enabled: s.IsEnabled };
+                });
+                applySettings();
+            } catch (err) {
+                console.error('Error fetching settings:', err);
+            }
+        }
+
+        function applySettings() {
+            const tip = appSettings['extra_tip'];
+            const banner = document.getElementById('extra-tip-banner');
+            if (tip && tip.enabled && tip.value) {
+                banner.innerText = tip.value;
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
 
         async function fetchMenu() {
             try {
@@ -101,6 +128,8 @@
             const code = document.getElementById('customer-code').value;
             if (!code || cart.length === 0) return alert('请输入暗号并选择商品');
             
+            localStorage.setItem('coffee_order_code', code);
+            
             const total = cart.reduce((sum, item) => sum + (item.Price * item.quantity), 0);
             const res = await fetch('/api/orders', {
                 method: 'POST',
@@ -114,12 +143,20 @@
                 cart = [];
                 updateCart();
                 fetchMyOrdersByCode();
+
+                const redirect = appSettings['redirect_url'];
+                if (redirect && redirect.enabled && redirect.value) {
+                    setTimeout(() => {
+                        window.location.href = redirect.value;
+                    }, 1500);
+                }
             }
         }
 
         async function fetchMyOrdersByCode() {
             const code = document.getElementById('search-code').value;
             if (!code) return;
+            localStorage.setItem('coffee_order_code', code);
             
             const listDiv = document.getElementById('my-orders-list');
             try {
@@ -155,7 +192,16 @@
             }
         }
 
+        // Initialize
+        const savedCode = localStorage.getItem('coffee_order_code');
+        if (savedCode) {
+            document.getElementById('customer-code').value = savedCode;
+            document.getElementById('search-code').value = savedCode;
+            fetchMyOrdersByCode();
+        }
+        
         fetchMenu();
+        fetchSettings();
     </script>
 </body>
 </html>

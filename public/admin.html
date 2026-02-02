@@ -37,6 +37,7 @@
     <div class="tabs">
         <button id="tab-orders" class="tab-btn active" onclick="showTab('orders')">点单处理</button>
         <button id="tab-menu" class="tab-btn" onclick="showTab('menu')">菜单管理</button>
+        <button id="tab-settings" class="tab-btn" onclick="showTab('settings')">系统设置</button>
     </div>
 
     <!-- 点单管理 -->
@@ -80,6 +81,26 @@
         </table>
     </div>
 
+    <!-- 系统设置 -->
+    <div id="section-settings" class="card" style="display:none">
+        <h2>⚙️ 系统设置</h2>
+        <div class="card">
+            <h3>额外提示内容</h3>
+            <div class="form-group">
+                <label><input type="checkbox" id="tip-enabled"> 启用提示</label>
+                <textarea id="tip-text" style="width: 100%; height: 80px; margin-top: 10px; display: block; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="显示在首页顶部的提示内容..."></textarea>
+            </div>
+        </div>
+        <div class="card" style="margin-top: 20px;">
+            <h3>下单后跳转</h3>
+            <div class="form-group">
+                <label><input type="checkbox" id="redirect-enabled"> 启用跳转</label>
+                <input type="text" id="redirect-url" style="margin-top: 10px; display: block; width: 95%; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="例如: https://forms.office.com/...">
+            </div>
+        </div>
+        <button class="primary" style="margin-top: 20px;" onclick="saveSettings()">保存所有设置</button>
+    </div>
+
     <script>
         let adminPassword = '';
 
@@ -93,6 +114,7 @@
         function showTab(tab) {
             document.getElementById('section-orders').style.display = tab === 'orders' ? 'block' : 'none';
             document.getElementById('section-menu').style.display = tab === 'menu' ? 'block' : 'none';
+            document.getElementById('section-settings').style.display = tab === 'settings' ? 'block' : 'none';
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
         }
@@ -113,6 +135,46 @@
                 throw new Error(text);
             }
             return res;
+        }
+
+        async function fetchSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                data.forEach(s => {
+                    if (s.SettingKey === 'extra_tip') {
+                        document.getElementById('tip-enabled').checked = s.IsEnabled;
+                        document.getElementById('tip-text').value = s.SettingValue || '';
+                    } else if (s.SettingKey === 'redirect_url') {
+                        document.getElementById('redirect-enabled').checked = s.IsEnabled;
+                        document.getElementById('redirect-url').value = s.SettingValue || '';
+                    }
+                });
+            } catch (e) {
+                console.error('Fetch settings error:', e);
+            }
+        }
+
+        async function saveSettings() {
+            const settings = [
+                {
+                    SettingKey: 'extra_tip',
+                    SettingValue: document.getElementById('tip-text').value,
+                    IsEnabled: document.getElementById('tip-enabled').checked
+                },
+                {
+                    SettingKey: 'redirect_url',
+                    SettingValue: document.getElementById('redirect-url').value,
+                    IsEnabled: document.getElementById('redirect-enabled').checked
+                }
+            ];
+            try {
+                await api('/api/admin/settings', 'PUT', settings);
+                alert('设置已保存');
+                await fetchSettings();
+            } catch (e) {
+                alert('保存失败: ' + e.message);
+            }
         }
 
         async function fetchOrders() {
@@ -228,6 +290,7 @@
         function refreshAll() {
             fetchOrders();
             fetchMenu();
+            fetchSettings();
         }
 
         setInterval(() => { if(adminPassword) fetchOrders(); }, 10000);

@@ -10,6 +10,90 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Comprehensive Database Initialization
+async function initializeDatabase() {
+    try {
+        const pool = await getPool();
+        if (!pool) return;
+        
+        console.log('Checking and initializing database schema...');
+
+        // 1. Create MenuItems table
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'MenuItems')
+            BEGIN
+                CREATE TABLE MenuItems (
+                    Id INT PRIMARY KEY IDENTITY(1,1),
+                    Name NVARCHAR(100) NOT NULL,
+                    Price DECIMAL(10, 2) NOT NULL,
+                    Description NVARCHAR(255),
+                    Category NVARCHAR(50),
+                    IsAvailable BIT DEFAULT 1
+                );
+                
+                -- Seed initial menu items
+                INSERT INTO MenuItems (Name, Price, Category, Description) VALUES 
+                (N'Latté', 28.00, N'Coffee', N'Classic espresso with steamed milk'),
+                (N'Americano', 22.00, N'Coffee', N'Espresso with hot water'),
+                (N'Cappuccino', 28.00, N'Coffee', N'Espresso with steamed milk foam'),
+                (N'Mocha', 32.00, N'Coffee', N'Espresso with chocolate and milk'),
+                (N'Flat White', 30.00, N'Coffee', N'Double espresso with silky microfoam milk');
+            END
+        `);
+
+        // 2. Create Orders table
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Orders')
+            BEGIN
+                CREATE TABLE Orders (
+                    Id INT PRIMARY KEY IDENTITY(1,1),
+                    OrderDate DATETIME DEFAULT GETDATE(),
+                    Status NVARCHAR(20) DEFAULT 'Pending',
+                    TotalPrice DECIMAL(10, 2) NOT NULL,
+                    CustomerName NVARCHAR(100)
+                );
+            END
+        `);
+
+        // 3. Create OrderItems table
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OrderItems')
+            BEGIN
+                CREATE TABLE OrderItems (
+                    Id INT PRIMARY KEY IDENTITY(1,1),
+                    OrderId INT FOREIGN KEY REFERENCES Orders(Id),
+                    MenuItemId INT FOREIGN KEY REFERENCES MenuItems(Id),
+                    Quantity INT NOT NULL,
+                    Price DECIMAL(10, 2) NOT NULL
+                );
+            END
+        `);
+
+        // 4. Create SystemSettings table
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SystemSettings')
+            BEGIN
+                CREATE TABLE SystemSettings (
+                    SettingKey NVARCHAR(50) PRIMARY KEY,
+                    SettingValue NVARCHAR(MAX),
+                    IsEnabled BIT DEFAULT 1
+                );
+            END
+            
+            -- Ensure default settings exist
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'extra_tip')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('extra_tip', '', 0);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'redirect_url')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);
+        `);
+
+        console.log('Database initialization completed.');
+    } catch (err) {
+        console.error('Error during database initialization:', err);
+    }
+}
+initializeDatabase();
+
 // Admin Authentication Middleware
 const adminAuth = (req, res, next) => {
     const password = req.headers['x-admin-password'];
@@ -255,6 +339,48 @@ app.delete('/api/admin/menu/:id', adminAuth, async (req, res) => {
             .query('DELETE FROM MenuItems WHERE Id = @id');
         res.send('Item deleted');
     } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+/** System Settings **/
+
+// Get System Settings (Public)
+app.get('/api/settings', async (req, res) => {
+    try {
+        const pool = await getPool();
+        const result = await pool.request().query('SELECT * FROM SystemSettings');
+        res.json(result.recordset);
+    } catch (err) {
+        console.error('API Error /api/settings:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Update System Settings (Admin Only)
+app.put('/api/admin/settings', adminAuth, async (req, res) => {
+    const settings = req.body; // Expecting array of { SettingKey, SettingValue, IsEnabled }
+    try {
+        const pool = await getPool();
+        for (const s of settings) {
+            await pool.request()
+                .input('key', sql.NVarChar, s.SettingKey)
+                .input('value', sql.NVarChar, s.SettingValue)
+                .input('enabled', sql.Bit, s.IsEnabled)
+                .query(`
+                    IF EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = @key)
+                    BEGIN
+                        UPDATE SystemSettings SET SettingValue = @value, IsEnabled = @enabled WHERE SettingKey = @key
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES (@key, @value, @enabled)
+                    END
+                `);
+        }
+        res.send('Settings updated');
+    } catch (err) {
+        console.error('API Error /api/admin/settings:', err);
         res.status(500).send(err.message);
     }
 });
