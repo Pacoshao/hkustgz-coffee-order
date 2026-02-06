@@ -111,6 +111,10 @@ async function initializeDatabase() {
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_dates_enabled', '1', 0);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_dates_list')
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_dates_list', '', 1);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_sessions_enabled')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_sessions_enabled', '1', 0);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_sessions_list')
+                INSERT INTO SystemSettings (SettingKey, SystemValue, IsEnabled) VALUES ('business_sessions_list', '[]', 1);
             
             -- Set defaults for null stock quantities
             UPDATE MenuItems SET StockQuantity = 0 WHERE StockQuantity IS NULL;
@@ -153,31 +157,29 @@ app.post('/api/orders', async (req, res) => {
     try {
         const pool = await getPool();
 
-        // Check Business Hours
-        const settingsResult = await pool.request().query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey LIKE 'business_%'");
+        // Check Business Status
+        const settingsResult = await pool.request().query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey = 'business_sessions_list' OR SettingKey = 'business_sessions_enabled'");
         const settings = {};
         settingsResult.recordset.forEach(s => settings[s.SettingKey] = s);
 
         const now = new Date();
-        // UTC+8 adjustment if necessary, but using server local time for simplicity
-        const todayStr = now.getFullYear() + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0');
 
-        // 1. Check Specific Business Dates
-        if (settings['business_dates_enabled']?.IsEnabled) {
-            const allowedDates = (settings['business_dates_list']?.SettingValue || '').split(',').map(d => d.trim());
-            if (!allowedDates.includes(todayStr)) {
-                return res.status(403).send(`今天 (${todayStr}) 不在营业日期内。`);
-            }
-        }
+        // Check Unified Business Sessions
+        if (settings['business_sessions_enabled']?.IsEnabled) {
+            let sessions = [];
+            try {
+                sessions = JSON.parse(settings['business_sessions_list']?.SettingValue || '[]');
+            } catch(e) { sessions = []; }
 
-        // 2. Check Daily Business Hours
-        if (settings['business_hours_enabled']?.IsEnabled) {
-            const currentStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-            const start = settings['business_hours_start']?.SettingValue || '00:00';
-            const end = settings['business_hours_end']?.SettingValue || '23:59';
+            const isOpen = sessions.some(s => {
+                if (!s.start || !s.end) return false;
+                const start = new Date(s.start);
+                const end = new Date(s.end);
+                return now >= start && now <= end;
+            });
 
-            if (currentStr < start || currentStr > end) {
-                return res.status(403).send(`不在营业时间内。点单开放时间: ${start} - ${end}`);
+            if (!isOpen) {
+                return res.status(403).send("当前不在营业时段内。");
             }
         }
 

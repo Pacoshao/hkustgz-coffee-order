@@ -162,31 +162,18 @@
                 <p style="font-size: 12px; color: #999; margin-top: 5px;">建议 10s 以上以平衡实时性与负载。</p>
             </div>
         </div>
-        <div class="card" style="margin-top: 20px;">
-            <h3>⏰ 营业时间设置</h3>
+
+        <div class="card" style="margin-top: 20px; border: 2px solid #0071e3; background: #f8fbff;">
+            <h3>⏰ 营业时段设置</h3>
             <div class="form-group">
-                <label><input type="checkbox" id="hours-enabled"> 启用营业时间限制</label>
+                <label style="color: #0071e3; font-weight: bold;"><input type="checkbox" id="sessions-enabled"> 启用营业时段限制</label>
+                <p style="font-size: 12px; color: #666; margin-top: 5px;">如果不启用，系统将全天 24 小时开放下单。</p>
             </div>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <div class="form-group" style="flex: 1; min-width: 120px;">
-                    <label>开始时间</label>
-                    <input type="time" id="hours-start">
-                </div>
-                <div class="form-group" style="flex: 1; min-width: 120px;">
-                    <label>结束时间</label>
-                    <input type="time" id="hours-end">
-                </div>
-            </div>
-            <p style="font-size: 12px; color: #999;">超出此时间段，系统将禁止用户提交新点单。</p>
+            <div id="sessions-container"></div>
+            <button onclick="addSessionRow()" style="margin-top: 10px; width: 100%; padding: 10px; background: #fff; border: 1px dashed #0071e3; color: #0071e3; border-radius: 8px; cursor: pointer; font-weight: bold;">+ 添加新营业时段</button>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;">选择起始日期时间与结束日期时间。例如：2026/02/06 08:30 至 17:30</p>
         </div>
-        <div class="card" style="margin-top: 20px;">
-            <h3>📅 特定营业日期 (日期白名单)</h3>
-            <div class="form-group">
-                <label><input type="checkbox" id="dates-enabled"> 仅允许在以下日期点单</label>
-                <textarea id="dates-list" style="width: 100%; height: 80px; margin-top: 10px; display: block; border: 1px solid #ddd; border-radius: 8px; padding: 10px;" placeholder="例如: 2026-02-06, 2026-02-14 (以逗号分隔)"></textarea>
-                <p style="font-size: 12px; color: #999; margin-top: 5px;">如果开启此项，只有在列表中的日期才允许下单。格式：YYYY-MM-DD</p>
-            </div>
-        </div>
+
         <button class="primary" style="margin-top: 20px; width: 100%; padding: 12px;" onclick="saveSettings()">保存所有设置</button>
     </div>
 
@@ -293,21 +280,40 @@
                     } else if (s.SettingKey === 'refresh_interval') {
                         document.getElementById('refresh-interval').value = s.SettingValue || '30';
                         setupAutoRefresh(parseInt(s.SettingValue || '30'));
-                    } else if (s.SettingKey === 'business_hours_start') {
-                        document.getElementById('hours-start').value = s.SettingValue || '08:00';
-                    } else if (s.SettingKey === 'business_hours_end') {
-                        document.getElementById('hours-end').value = s.SettingValue || '20:00';
-                    } else if (s.SettingKey === 'business_hours_enabled') {
-                        document.getElementById('hours-enabled').checked = s.IsEnabled;
-                    } else if (s.SettingKey === 'business_dates_list') {
-                        document.getElementById('dates-list').value = s.SettingValue || '';
-                    } else if (s.SettingKey === 'business_dates_enabled') {
-                        document.getElementById('dates-enabled').checked = s.IsEnabled;
+                    } else if (s.SettingKey === 'business_sessions_enabled') {
+                        document.getElementById('sessions-enabled').checked = s.IsEnabled;
+                    } else if (s.SettingKey === 'business_sessions_list') {
+                        renderSessions(s.SettingValue || '[]');
                     }
                 });
             } catch (e) {
                 console.error('Fetch settings error:', e);
             }
+        }
+
+        function addSessionRow(start = '', end = '') {
+            const container = document.getElementById('sessions-container');
+            const row = document.createElement('div');
+            row.className = 'option-row';
+            row.style.marginBottom = '10px';
+            row.innerHTML = `
+                <div style="display:flex; flex:1; gap:5px; align-items:center; flex-wrap:wrap">
+                    <input type="datetime-local" class="session-start" value="${start}" style="flex:1">
+                    <span>至</span>
+                    <input type="datetime-local" class="session-end" value="${end}" style="flex:1">
+                </div>
+                <button class="danger" onclick="this.parentElement.remove()" style="padding: 5px 10px;">×</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function renderSessions(jsonStr) {
+            const container = document.getElementById('sessions-container');
+            container.innerHTML = '';
+            try {
+                const sessions = JSON.parse(jsonStr);
+                sessions.forEach(s => addSessionRow(s.start, s.end));
+            } catch(e) {}
         }
 
         function setupAutoRefresh(seconds) {
@@ -336,29 +342,17 @@
                     IsEnabled: true
                 },
                 {
-                    SettingKey: 'business_hours_start',
-                    SettingValue: document.getElementById('hours-start').value,
-                    IsEnabled: true
-                },
-                {
-                    SettingKey: 'business_hours_end',
-                    SettingValue: document.getElementById('hours-end').value,
-                    IsEnabled: true
-                },
-                {
-                    SettingKey: 'business_hours_enabled',
+                    SettingKey: 'business_sessions_enabled',
                     SettingValue: '1',
-                    IsEnabled: document.getElementById('hours-enabled').checked
+                    IsEnabled: document.getElementById('sessions-enabled').checked
                 },
                 {
-                    SettingKey: 'business_dates_list',
-                    SettingValue: document.getElementById('dates-list').value,
+                    SettingKey: 'business_sessions_list',
+                    SettingValue: JSON.stringify(Array.from(document.querySelectorAll('#sessions-container .option-row')).map(row => ({
+                        start: row.querySelector('.session-start').value,
+                        end: row.querySelector('.session-end').value
+                    })).filter(s => s.start && s.end)),
                     IsEnabled: true
-                },
-                {
-                    SettingKey: 'business_dates_enabled',
-                    SettingValue: '1',
-                    IsEnabled: document.getElementById('dates-enabled').checked
                 }
             ];
             try {

@@ -54,12 +54,8 @@
     
     <div id="extra-tip-banner" style="display:none; background: #fff3cd; color: #856404; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ffeeba; white-space: pre-wrap; font-size: 14px; line-height: 1.4;"></div>
 
-    <div id="hours-banner" style="display:none; background: #e2f0fe; color: #0071e3; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #cce5ff; font-size: 14px; text-align: center;">
-        🕙 营业时间：<span id="hours-display"></span>
-    </div>
-
-    <div id="dates-banner" style="display:none; background: #fff0f0; color: #d0021b; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ffd6d6; font-size: 14px; text-align: center;">
-        📅 仅在特定日期开放：<span id="dates-display"></span>
+    <div id="sessions-banner" style="display:none; background: #e6fffa; color: #2c7a7b; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #b2f5ea; font-size: 14px; text-align: center;">
+        ⌛ 营业时段：<span id="sessions-display"></span>
     </div>
 
     <div id="menu" class="menu-grid">正在加载菜单...</div>
@@ -114,70 +110,69 @@
                 banner.style.display = 'none';
             }
 
-            // Business Hours Logic
-            const hoursEnabled = appSettings['business_hours_enabled'];
-            const hoursStart = appSettings['business_hours_start'];
-            const hoursEnd = appSettings['business_hours_end'];
-            const hoursBanner = document.getElementById('hours-banner');
             const placeOrderBtn = document.querySelector('button[onclick="placeOrder()"]');
+            const now = new Date();
+            let isBusinessActive = true;
+            let statusMessage = '提交点单';
 
-            if (hoursEnabled && hoursEnabled.enabled) {
-                const start = hoursStart ? hoursStart.value : '08:00';
-                const end = hoursEnd ? hoursEnd.value : '20:00';
-                document.getElementById('hours-display').innerText = `${start} - ${end}`;
-                hoursBanner.style.display = 'block';
-
-                const now = new Date();
-                const cur = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                
-                if (cur < start || cur > end) {
-                    placeOrderBtn.disabled = true;
-                    placeOrderBtn.innerText = '未在营业时间内';
-                    placeOrderBtn.style.background = '#ccc';
-                } else {
-                    placeOrderBtn.disabled = false;
-                    placeOrderBtn.innerText = '提交点单';
-                    placeOrderBtn.style.background = '#0071e3';
-                }
-            } else {
-                hoursBanner.style.display = 'none';
-            }
-
-            // Business Dates Logic
-            const datesEnabled = appSettings['business_dates_enabled'];
-            const datesList = appSettings['business_dates_list'];
-            const datesBanner = document.getElementById('dates-banner');
+            // Unified Sessions Logic
+            const sessionsEnabled = appSettings['business_sessions_enabled'];
+            const sessionsList = appSettings['business_sessions_list'];
+            const sessionsBanner = document.getElementById('sessions-banner');
             
-            let isDateAllowed = true;
-            if (datesEnabled && datesEnabled.enabled) {
-                const allowed = (datesList ? datesList.value : '').split(',').map(d => d.trim()).filter(d => d);
-                document.getElementById('dates-display').innerText = allowed.join(', ') || '尚未设置日期';
-                datesBanner.style.display = 'block';
+            if (sessionsEnabled && sessionsEnabled.enabled) {
+                let sessions = [];
+                try {
+                    sessions = JSON.parse(sessionsList ? sessionsList.value : '[]');
+                } catch(e) {}
+                
+                if (sessions.length > 0) {
+                    const displayList = sessions.map(s => {
+                        const start = new Date(s.start);
+                        const end = new Date(s.end);
+                        const fmt = d => `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                        return `${fmt(start)} ~ ${fmt(end)}`;
+                    });
+                    document.getElementById('sessions-display').innerText = displayList.join(' | ');
+                    sessionsBanner.style.display = 'block';
 
-                const now = new Date();
-                const todayStr = now.getFullYear() + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0');
-                if (!allowed.includes(todayStr)) {
-                    isDateAllowed = false;
+                    const currentSession = sessions.find(s => {
+                        if (!s.start || !s.end) return false;
+                        const start = new Date(s.start);
+                        const end = new Date(s.end);
+                        return now >= start && now <= end;
+                    });
+
+                    if (!currentSession) {
+                        isBusinessActive = false;
+                        statusMessage = '不在营业时段';
+                    }
+                } else {
+                    sessionsBanner.style.display = 'none';
+                    isBusinessActive = false;
+                    statusMessage = '时段未设置';
                 }
             } else {
-                datesBanner.style.display = 'none';
+                sessionsBanner.style.display = 'none';
             }
 
-            // Final check to disable button
-            if (!isDateAllowed) {
+            // Apply to button
+            if (!isBusinessActive) {
                 placeOrderBtn.disabled = true;
-                placeOrderBtn.innerText = '今天不营业';
+                placeOrderBtn.innerText = statusMessage;
                 placeOrderBtn.style.background = '#ccc';
-            } else if (hoursEnabled && hoursEnabled.enabled) {
-                const start = hoursStart ? hoursStart.value : '08:00';
-                const end = hoursEnd ? hoursEnd.value : '20:00';
-                const now = new Date();
-                const cur = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                if (cur < start || cur > end) {
-                    placeOrderBtn.disabled = true;
-                    placeOrderBtn.innerText = '未在营业时间内';
-                    placeOrderBtn.style.background = '#ccc';
-                } else {
+            } else {
+                placeOrderBtn.disabled = false;
+                placeOrderBtn.innerText = '提交点单';
+                placeOrderBtn.style.background = '#0071e3';
+            }
+        }
+
+            // Apply to button
+            if (!isBusinessActive) {
+                placeOrderBtn.disabled = true;
+                placeOrderBtn.innerText = statusMessage;
+                placeOrderBtn.style.background = '#ccc'; else {
                     placeOrderBtn.disabled = false;
                     placeOrderBtn.innerText = '提交点单';
                     placeOrderBtn.style.background = '#0071e3';
