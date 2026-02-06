@@ -168,22 +168,6 @@
             }
         }
 
-            // Apply to button
-            if (!isBusinessActive) {
-                placeOrderBtn.disabled = true;
-                placeOrderBtn.innerText = statusMessage;
-                placeOrderBtn.style.background = '#ccc'; else {
-                    placeOrderBtn.disabled = false;
-                    placeOrderBtn.innerText = '提交点单';
-                    placeOrderBtn.style.background = '#0071e3';
-                }
-            } else {
-                placeOrderBtn.disabled = false;
-                placeOrderBtn.innerText = '提交点单';
-                placeOrderBtn.style.background = '#0071e3';
-            }
-        }
-
         async function fetchMenu() {
             try {
                 const res = await fetch('/api/menu');
