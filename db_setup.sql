@@ -5,7 +5,8 @@ CREATE TABLE MenuItems (
     Price DECIMAL(10, 2) NOT NULL,
     Description NVARCHAR(255),
     Category NVARCHAR(50),
-    IsAvailable BIT DEFAULT 1
+    IsAvailable BIT DEFAULT 1,
+    StockQuantity INT DEFAULT 0
 );
 
 -- Create Orders table
@@ -27,10 +28,10 @@ CREATE TABLE OrderItems (
 );
 
 -- Seed some initial menu items
-INSERT INTO MenuItems (Name, Price, Category, Description) VALUES 
-('Latté', 28.00, 'Coffee', 'Classic espresso with steamed milk'),
-('Americano', 22.00, 'Coffee', 'Espresso with hot water'),
-('Cappuccino', 28.00, 'Coffee', 'Espresso with steamed milk foam'),
-('Mocha', 32.00, 'Coffee', 'Espresso with chocolate and milk'),
-('Flat White', 30.00, 'Coffee', 'Double espresso with silky microfoam milk');
+INSERT INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
+('Latté', 28.00, 'Coffee', 'Classic espresso with steamed milk', 50),
+('Americano', 22.00, 'Coffee', 'Espresso with hot water', 50),
+('Cappuccino', 28.00, 'Coffee', 'Espresso with steamed milk foam', 50),
+('Mocha', 32.00, 'Coffee', 'Espresso with chocolate and milk', 50),
+('Flat White', 30.00, 'Coffee', 'Double espresso with silky microfoam milk', 50);
 GO

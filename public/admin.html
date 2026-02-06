@@ -44,7 +44,9 @@
     <div id="section-orders" class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h2>📋 点单记录</h2>
-            <div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span id="last-refresh-time" style="font-size: 12px; color: #999;"></span>
+                <button class="primary" onclick="fetchOrders()">立即刷新</button>
                 <button class="primary" onclick="exportOrders()">导出 CSV</button>
                 <button class="danger" onclick="clearAllOrders()">清空所有记录</button>
             </div>
@@ -64,17 +66,18 @@
         <h2>🍔 菜单管理</h2>
         <div class="card" style="background: #f9f9f9">
             <h3>添加新品</h3>
-            <div class="form-group">
-                <input type="text" id="m-name" placeholder="名称">
-                <input type="number" id="m-price" placeholder="价格">
-                <input type="text" id="m-desc" placeholder="描述">
+            <div class="form-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="m-name" placeholder="名称" style="flex: 1; min-width: 150px;">
+                <input type="number" id="m-price" placeholder="价格" style="flex: 0.5; min-width: 80px;">
+                <input type="number" id="m-stock" placeholder="库存数量" style="flex: 0.5; min-width: 80px;">
+                <input type="text" id="m-desc" placeholder="描述" style="flex: 2; min-width: 200px;">
                 <button class="primary" onclick="addMenuItem()">添加</button>
             </div>
         </div>
         <table>
             <thead>
                 <tr>
-                    <th>名称</th><th>价格</th><th>描述</th><th>库存状态</th><th>操作</th>
+                    <th>名称</th><th>价格</th><th>描述</th><th>库存</th><th>状态</th><th>操作</th>
                 </tr>
             </thead>
             <tbody id="menu-list"></tbody>
@@ -98,11 +101,20 @@
                 <input type="text" id="redirect-url" style="margin-top: 10px; display: block; width: 95%; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="例如: https://forms.office.com/...">
             </div>
         </div>
+        <div class="card" style="margin-top: 20px;">
+            <h3>自动刷新设置</h3>
+            <div class="form-group">
+                <label>后台记录自动刷新间隔 (秒)</label>
+                <input type="number" id="refresh-interval" style="margin-top: 10px; display: block; width: 100px; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" min="5" value="30">
+                <p style="font-size: 12px; color: #999; margin-top: 5px;">设置较短的时间可以更实时地看到新订单，但会增加服务器压力。</p>
+            </div>
+        </div>
         <button class="primary" style="margin-top: 20px;" onclick="saveSettings()">保存所有设置</button>
     </div>
 
     <script>
         let adminPassword = '';
+        let refreshTimer = null;
 
         function login() {
             adminPassword = document.getElementById('admin-pw-input').value;
@@ -148,11 +160,22 @@
                     } else if (s.SettingKey === 'redirect_url') {
                         document.getElementById('redirect-enabled').checked = s.IsEnabled;
                         document.getElementById('redirect-url').value = s.SettingValue || '';
+                    } else if (s.SettingKey === 'refresh_interval') {
+                        document.getElementById('refresh-interval').value = s.SettingValue || '30';
+                        setupAutoRefresh(parseInt(s.SettingValue || '30'));
                     }
                 });
             } catch (e) {
                 console.error('Fetch settings error:', e);
             }
+        }
+
+        function setupAutoRefresh(seconds) {
+            if (refreshTimer) clearInterval(refreshTimer);
+            if (seconds < 5) seconds = 5; // Minimum 5s
+            refreshTimer = setInterval(() => {
+                if (adminPassword) fetchOrders();
+            }, seconds * 1000);
         }
 
         async function saveSettings() {
@@ -166,6 +189,11 @@
                     SettingKey: 'redirect_url',
                     SettingValue: document.getElementById('redirect-url').value,
                     IsEnabled: document.getElementById('redirect-enabled').checked
+                },
+                {
+                    SettingKey: 'refresh_interval',
+                    SettingValue: document.getElementById('refresh-interval').value,
+                    IsEnabled: true
                 }
             ];
             try {
@@ -191,6 +219,7 @@
                         </td>
                     </tr>
                 `).join('');
+                document.getElementById('last-refresh-time').innerText = '上次刷新: ' + new Date().toLocaleTimeString();
             } catch (e) {
                 console.error('Fetch orders error:', e);
             }
@@ -236,9 +265,15 @@
                 document.getElementById('menu-list').innerHTML = data.map(m => `
                     <tr>
                         <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description}</td>
-                        <td style="color: ${m.IsAvailable ? 'green' : 'red'}">${m.IsAvailable ? '在售' : '已下架'}</td>
                         <td>
-                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price})">${m.IsAvailable ? '下架' : '上架'}</button>
+                            <input type="number" value="${m.StockQuantity}" style="width: 60px" id="stock-${m.Id}">
+                            <button onclick="updateStock(${m.Id}, '${m.Name}', ${m.Price}, ${m.IsAvailable})">更新</button>
+                        </td>
+                        <td style="color: ${m.StockQuantity > 0 && m.IsAvailable ? 'green' : 'red'}">
+                            ${m.IsAvailable ? (m.StockQuantity > 0 ? '在售' : '已售罄') : '已下架'}
+                        </td>
+                        <td>
+                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price}, ${m.StockQuantity})">${m.IsAvailable ? '下架' : '上架'}</button>
                             <button class="danger" onclick="deleteMenu(${m.Id})">从列表删除</button>
                         </td>
                     </tr>
@@ -246,6 +281,15 @@
             } catch (e) {
                 console.error('Fetch menu error:', e);
             }
+        }
+
+        async function updateStock(id, name, price, isAvailable) {
+            const stockQuantity = document.getElementById('stock-' + id).value;
+            try {
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable, stockQuantity });
+                alert('库存已更新');
+                fetchMenu();
+            } catch (e) { alert('更新失败: ' + e.message); }
         }
 
         async function completeOrder(id) {
@@ -260,18 +304,20 @@
                 const name = document.getElementById('m-name').value;
                 const price = document.getElementById('m-price').value;
                 const description = document.getElementById('m-desc').value;
+                const stockQuantity = document.getElementById('m-stock').value || 0;
                 if (!name || !price) return alert('请填写名称和价格');
-                await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee' });
+                await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee', stockQuantity });
                 fetchMenu();
                 document.getElementById('m-name').value = '';
                 document.getElementById('m-price').value = '';
                 document.getElementById('m-desc').value = '';
+                document.getElementById('m-stock').value = '';
             } catch (e) { alert('添加失败: ' + e.message); }
         }
 
-        async function toggleMenu(id, currentStatus, name, price) {
+        async function toggleMenu(id, currentStatus, name, price, stockQuantity) {
             try {
-                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus });
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus, stockQuantity });
                 fetchMenu();
             } catch (e) { alert('操作失败: ' + e.message); }
         }
@@ -292,8 +338,12 @@
             fetchMenu();
             fetchSettings();
         }
-
-        setInterval(() => { if(adminPassword) fetchOrders(); }, 10000);
     </script>
+    <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
+        <a href="https://github.com/Pacoshao" target="_blank" style="text-decoration: none; color: #666; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; transition: all 0.3s;">
+            <img src="https://github.com/Pacoshao.png" style="width: 24px; height: 24px; border-radius: 50%;">
+            <span>GitHub @Pacoshao</span>
+        </a>
+    </div>
 </body>
 </html>

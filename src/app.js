@@ -28,16 +28,30 @@ async function initializeDatabase() {
                     Price DECIMAL(10, 2) NOT NULL,
                     Description NVARCHAR(255),
                     Category NVARCHAR(50),
-                    IsAvailable BIT DEFAULT 1
+                    IsAvailable BIT DEFAULT 1,
+                    StockQuantity INT DEFAULT 0
                 );
-                
-                -- Seed initial menu items
-                INSERT INTO MenuItems (Name, Price, Category, Description) VALUES 
-                (N'Latté', 28.00, N'Coffee', N'Classic espresso with steamed milk'),
-                (N'Americano', 22.00, N'Coffee', N'Espresso with hot water'),
-                (N'Cappuccino', 28.00, N'Coffee', N'Espresso with steamed milk foam'),
-                (N'Mocha', 32.00, N'Coffee', N'Espresso with chocolate and milk'),
-                (N'Flat White', 30.00, N'Coffee', N'Double espresso with silky microfoam milk');
+            END
+
+            -- Seed initial menu items if table is empty
+            IF NOT EXISTS (SELECT 1 FROM MenuItems)
+            BEGIN
+                INSERT INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
+                (N'Latté', 28.00, N'Coffee', N'Classic espresso with steamed milk', 50),
+                (N'Americano', 22.00, N'Coffee', N'Espresso with hot water', 50),
+                (N'Cappuccino', 28.00, N'Coffee', N'Espresso with steamed milk foam', 50),
+                (N'Mocha', 32.00, N'Coffee', N'Espresso with chocolate and milk', 50),
+                (N'Flat White', 30.00, N'Coffee', N'Double espresso with silky microfoam milk', 50);
+            END
+            
+            -- Ensure StockQuantity column exists for existing tables
+            IF EXISTS (SELECT * FROM sys.tables WHERE name = 'MenuItems')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'StockQuantity')
+                BEGIN
+                    ALTER TABLE MenuItems ADD StockQuantity INT DEFAULT 0;
+                    UPDATE MenuItems SET StockQuantity = 50 WHERE StockQuantity IS NULL OR StockQuantity = 0;
+                END
             END
         `);
 
@@ -84,8 +98,8 @@ async function initializeDatabase() {
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'extra_tip')
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('extra_tip', '', 0);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'redirect_url')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);
-        `);
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'refresh_interval')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1);        `);
 
         console.log('Database initialization completed.');
     } catch (err) {
@@ -126,6 +140,20 @@ app.post('/api/orders', async (req, res) => {
 
         try {
             const request = new sql.Request(transaction);
+
+            // 1. Pre-check all items stock (Quick look before starting DB inserts)
+            for (const item of items) {
+                const stockCheckResult = await request
+                    .input(`item_id_chk_${item.id}`, sql.Int, item.id)
+                    .query(`SELECT StockQuantity, Name FROM MenuItems WHERE Id = @item_id_chk_${item.id}`);
+                
+                const dbItem = stockCheckResult.recordset[0];
+                if (!dbItem || dbItem.StockQuantity < item.quantity) {
+                    throw new Error(`库存不足: ${dbItem ? dbItem.Name : '未知商品'} (剩余: ${dbItem ? dbItem.StockQuantity : 0})`);
+                }
+            }
+
+            // 2. Create the Order
             const orderResult = await request
                 .input('code', sql.NVarChar, code)
                 .input('totalPrice', sql.Decimal(10, 2), totalPrice)
@@ -133,8 +161,22 @@ app.post('/api/orders', async (req, res) => {
 
             const orderId = orderResult.recordset[0].Id;
 
+            // 3. Process each item: Insert and Deduct Stock Atomically
             for (const item of items) {
                 const itemRequest = new sql.Request(transaction);
+                
+                // Atomically deduct stock and check result
+                const updateStockResult = await itemRequest
+                    .input('dec_id', sql.Int, item.id)
+                    .input('dec_qty', sql.Int, item.quantity)
+                    .query('UPDATE MenuItems SET StockQuantity = StockQuantity - @dec_qty WHERE Id = @dec_id AND StockQuantity >= @dec_qty');
+                
+                if (updateStockResult.rowsAffected[0] === 0) {
+                    // This happens if someone else took the stock between step 1 and here
+                    throw new Error(`下单失败: 商品库存已被抢光或不存在`);
+                }
+
+                // Insert OrderItem
                 await itemRequest
                     .input('orderId', sql.Int, orderId)
                     .input('menuItemId', sql.Int, item.id)
@@ -150,7 +192,7 @@ app.post('/api/orders', async (req, res) => {
             throw err;
         }
     } catch (err) {
-        res.status(500).send(err.message);
+        res.status(400).send(err.message);
     }
 });
 
@@ -179,11 +221,34 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
     const { status } = req.body;
     try {
         const pool = await getPool();
-        await pool.request()
-            .input('id', sql.Int, id)
-            .input('status', sql.NVarChar, status)
-            .query('UPDATE Orders SET Status = @status WHERE Id = @id');
-        res.send('Order status updated');
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        try {
+            const request = new sql.Request(transaction);
+
+            // Get current status and items if we are cancelling
+            const currentOrder = await request.input('oid', sql.Int, id).query('SELECT Status FROM Orders WHERE Id = @oid');
+            const oldStatus = currentOrder.recordset[0]?.Status;
+
+            await request
+                .input('id', sql.Int, id)
+                .input('status', sql.NVarChar, status)
+                .query('UPDATE Orders SET Status = @status WHERE Id = @id');
+            
+            // If transition to Cancelled from something else, return stock
+            if (status === 'Cancelled' && oldStatus !== 'Cancelled') {
+                const items = await request.query(`SELECT MenuItemId, Quantity FROM OrderItems WHERE OrderId = ${id}`);
+                for (const item of items.recordset) {
+                    await request.query(`UPDATE MenuItems SET StockQuantity = StockQuantity + ${item.Quantity} WHERE Id = ${item.MenuItemId}`);
+                }
+            }
+
+            await transaction.commit();
+            res.send('Order status updated');
+        } catch (err) {
+            await transaction.rollback();
+            throw err;
+        }
     } catch (err) {
         res.status(500).send(err.message);
     }
@@ -241,14 +306,29 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
     const { id } = req.params;
     try {
         const pool = await getPool();
-        const result = await pool.request()
-            .input('id', sql.Int, id)
-            .query('UPDATE Orders SET Status = \'Cancelled\' WHERE Id = @id AND Status = \'Pending\'');
-        
-        if (result.rowsAffected[0] > 0) {
-            res.send('Order cancelled');
-        } else {
-            res.status(400).send('Order cannot be cancelled (might not be pending)');
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        try {
+            const request = new sql.Request(transaction);
+            const result = await request
+                .input('id', sql.Int, id)
+                .query('UPDATE Orders SET Status = \'Cancelled\' WHERE Id = @id AND Status = \'Pending\'');
+            
+            if (result.rowsAffected[0] > 0) {
+                // Return stock
+                const items = await request.query(`SELECT MenuItemId, Quantity FROM OrderItems WHERE OrderId = ${id}`);
+                for (const item of items.recordset) {
+                    await request.query(`UPDATE MenuItems SET StockQuantity = StockQuantity + ${item.Quantity} WHERE Id = ${item.MenuItemId}`);
+                }
+                await transaction.commit();
+                res.send('Order cancelled');
+            } else {
+                await transaction.rollback();
+                res.status(400).send('Order cannot be cancelled (might not be pending)');
+            }
+        } catch (err) {
+            await transaction.rollback();
+            throw err;
         }
     } catch (err) {
         res.status(500).send(err.message);
@@ -294,7 +374,7 @@ app.get('/api/admin/menu', adminAuth, async (req, res) => {
 
 // Add Menu Item
 app.post('/api/admin/menu', adminAuth, async (req, res) => {
-    const { name, price, description, category } = req.body;
+    const { name, price, description, category, stockQuantity } = req.body;
     try {
         const pool = await getPool();
         await pool.request()
@@ -302,7 +382,8 @@ app.post('/api/admin/menu', adminAuth, async (req, res) => {
             .input('price', sql.Decimal(10, 2), price)
             .input('description', sql.NVarChar, description)
             .input('category', sql.NVarChar, category)
-            .query('INSERT INTO MenuItems (Name, Price, Description, Category) VALUES (@name, @price, @description, @category)');
+            .input('stockQuantity', sql.Int, stockQuantity || 0)
+            .query('INSERT INTO MenuItems (Name, Price, Description, Category, StockQuantity) VALUES (@name, @price, @description, @category, @stockQuantity)');
         res.status(201).send('Item added');
     } catch (err) {
         res.status(500).send(err.message);
@@ -312,7 +393,7 @@ app.post('/api/admin/menu', adminAuth, async (req, res) => {
 // Update Menu Item
 app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
-    const { name, price, description, category, isAvailable } = req.body;
+    const { name, price, description, category, isAvailable, stockQuantity } = req.body;
     try {
         const pool = await getPool();
         await pool.request()
@@ -322,7 +403,8 @@ app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
             .input('description', sql.NVarChar, description)
             .input('category', sql.NVarChar, category)
             .input('isAvailable', sql.Bit, isAvailable)
-            .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable WHERE Id = @id');
+            .input('stockQuantity', sql.Int, stockQuantity)
+            .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable, StockQuantity = @stockQuantity WHERE Id = @id');
         res.send('Item updated');
     } catch (err) {
         res.status(500).send(err.message);

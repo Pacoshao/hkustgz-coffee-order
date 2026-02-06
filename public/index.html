@@ -93,35 +93,64 @@
 
         function renderMenu() {
             const menuDiv = document.getElementById('menu');
-            menuDiv.innerHTML = menuData.map(item => `
-                <div class="menu-item">
-                    <h3>${item.Name}</h3>
-                    <p>${item.Description}</p>
-                    <p class="price">¥${item.Price.toFixed(2)}</p>
-                    <button onclick="addToCart(${item.Id})">加入篮子</button>
-                </div>
-            `).join('');
+            menuDiv.innerHTML = menuData.map(item => {
+                const inCart = cart.find(c => c.id === item.Id);
+                const quantityInCart = inCart ? inCart.quantity : 0;
+                const effectiveStock = item.StockQuantity - quantityInCart;
+
+                return `
+                    <div class="menu-item">
+                        <h3>${item.Name}</h3>
+                        <p>${item.Description}</p>
+                        <p class="price">¥${item.Price.toFixed(2)}</p>
+                        <p style="font-size: 0.8em; color: ${effectiveStock > 0 ? '#666' : 'red'}">
+                            ${effectiveStock > 0 ? `剩余库存: ${effectiveStock}` : '已售罄'}
+                        </p>
+                        <button onclick="addToCart(${item.Id})" ${effectiveStock > 0 ? '' : 'disabled style="background:#ccc"'}>
+                            ${effectiveStock > 0 ? '加入篮子' : '无法购买'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
         }
 
         function addToCart(id) {
             const item = menuData.find(m => m.Id === id);
             const inCart = cart.find(c => c.id === id);
+            
+            // Front-end stock check
+            const currentQtyInCart = inCart ? inCart.quantity : 0;
+            if (currentQtyInCart + 1 > item.StockQuantity) {
+                alert('抱歉，该商品库存不足');
+                return;
+            }
+
             if (inCart) {
                 inCart.quantity++;
             } else {
                 cart.push({ ...item, id: item.Id, quantity: 1, price: item.Price });
             }
             updateCart();
+            renderMenu(); // Re-render to update effective stock display
         }
 
         function updateCart() {
             const cartDiv = document.getElementById('cart-items');
             const totalSpan = document.getElementById('total-price');
-            cartDiv.innerHTML = cart.map(item => `
-                <div>${item.Name} x ${item.quantity} (¥${(item.Price * item.quantity).toFixed(2)})</div>
+            cartDiv.innerHTML = cart.map((item, index) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <span>${item.Name} x ${item.quantity} (¥${(item.Price * item.quantity).toFixed(2)})</span>
+                    <button onclick="removeFromCart(${index})" style="background: #ff3b30; padding: 2px 8px; font-size: 12px;">移除</button>
+                </div>
             `).join('');
             const total = cart.reduce((sum, item) => sum + (item.Price * item.quantity), 0);
             totalSpan.innerText = total.toFixed(2);
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            updateCart();
+            renderMenu();
         }
 
         async function placeOrder() {
@@ -143,6 +172,7 @@
                 cart = [];
                 updateCart();
                 fetchMyOrdersByCode();
+                fetchMenu(); // Refresh menu to update stock display
 
                 const redirect = appSettings['redirect_url'];
                 if (redirect && redirect.enabled && redirect.value) {
@@ -150,6 +180,9 @@
                         window.location.href = redirect.value;
                     }, 1500);
                 }
+            } else {
+                const errorMsg = await res.text();
+                alert('下单失败: ' + errorMsg);
             }
         }
 
@@ -203,5 +236,11 @@
         fetchMenu();
         fetchSettings();
     </script>
+    <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
+        <a href="https://github.com/Pacoshao" target="_blank" style="text-decoration: none; color: #666; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; transition: all 0.3s;">
+            <img src="https://github.com/Pacoshao.png" style="width: 24px; height: 24px; border-radius: 50%;">
+            <span>GitHub @Pacoshao</span>
+        </a>
+    </div>
 </body>
 </html>
