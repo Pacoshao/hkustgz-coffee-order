@@ -264,16 +264,16 @@
                 const data = await res.json();
                 document.getElementById('menu-list').innerHTML = data.map(m => `
                     <tr>
-                        <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description}</td>
+                        <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description || ''}</td>
                         <td>
                             <input type="number" value="${m.StockQuantity}" style="width: 60px" id="stock-${m.Id}">
-                            <button onclick="updateStock(${m.Id}, '${m.Name}', ${m.Price}, ${m.IsAvailable})">更新</button>
+                            <button onclick="updateStock(${m.Id}, '${m.Name.replace(/'/g, "\\'")}', ${m.Price}, ${m.IsAvailable}, '${(m.Description || '').replace(/'/g, "\\'")}')">更新</button>
                         </td>
                         <td style="color: ${m.StockQuantity > 0 && m.IsAvailable ? 'green' : 'red'}">
                             ${m.IsAvailable ? (m.StockQuantity > 0 ? '在售' : '已售罄') : '已下架'}
                         </td>
                         <td>
-                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name}', ${m.Price}, ${m.StockQuantity})">${m.IsAvailable ? '下架' : '上架'}</button>
+                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name.replace(/'/g, "\\'")}', ${m.Price}, ${m.StockQuantity}, '${(m.Description || '').replace(/'/g, "\\'")}')">${m.IsAvailable ? '下架' : '上架'}</button>
                             <button class="danger" onclick="deleteMenu(${m.Id})">从列表删除</button>
                         </td>
                     </tr>
@@ -283,10 +283,10 @@
             }
         }
 
-        async function updateStock(id, name, price, isAvailable) {
+        async function updateStock(id, name, price, isAvailable, description) {
             const stockQuantity = document.getElementById('stock-' + id).value;
             try {
-                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable, stockQuantity });
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable, stockQuantity, description });
                 alert('库存已更新');
                 fetchMenu();
             } catch (e) { alert('更新失败: ' + e.message); }
@@ -303,7 +303,7 @@
             try {
                 const name = document.getElementById('m-name').value;
                 const price = document.getElementById('m-price').value;
-                const description = document.getElementById('m-desc').value;
+                const description = document.getElementById('m-desc').value || '';
                 const stockQuantity = document.getElementById('m-stock').value || 0;
                 if (!name || !price) return alert('请填写名称和价格');
                 await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee', stockQuantity });
@@ -315,9 +315,9 @@
             } catch (e) { alert('添加失败: ' + e.message); }
         }
 
-        async function toggleMenu(id, currentStatus, name, price, stockQuantity) {
+        async function toggleMenu(id, currentStatus, name, price, stockQuantity, description) {
             try {
-                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus, stockQuantity });
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus, stockQuantity, description });
                 fetchMenu();
             } catch (e) { alert('操作失败: ' + e.message); }
         }

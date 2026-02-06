@@ -397,8 +397,8 @@ app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
             .input('id', sql.Int, id)
             .input('name', sql.NVarChar, name)
             .input('price', sql.Decimal(10, 2), price)
-            .input('description', sql.NVarChar, description)
-            .input('category', sql.NVarChar, category)
+            .input('description', sql.NVarChar, description || '')
+            .input('category', sql.NVarChar, category || 'Coffee')
             .input('isAvailable', sql.Bit, isAvailable)
             .input('stockQuantity', sql.Int, stockQuantity)
             .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable, StockQuantity = @stockQuantity WHERE Id = @id');
