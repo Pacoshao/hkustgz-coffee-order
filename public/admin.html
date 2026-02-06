@@ -39,6 +39,13 @@
         .header-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
         .action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 
+        /* Global Options UI */
+        .option-tag { display: inline-block; background: #eef2f7; padding: 2px 8px; border-radius: 4px; margin-right: 5px; margin-bottom: 5px; font-size: 12px; border: 1px solid #d1d9e6; }
+        .edit-options-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; }
+        .options-box { background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .option-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .option-row input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
+
         @media (max-width: 600px) {
             body { padding: 10px; }
             .card { padding: 15px; }
@@ -56,6 +63,20 @@
             <h2>管理员登录</h2>
             <input type="password" id="admin-pw-input" placeholder="输入后台密码" style="padding:10px; width:200px">
             <button class="primary" onclick="login()">进入</button>
+        </div>
+    </div>
+
+    <!-- 自定义选项编辑器 -->
+    <div id="options-editor" class="edit-options-modal">
+        <div class="options-box">
+            <h3 style="margin-top:0">配置自定义选项</h3>
+            <p style="font-size: 12px; color: #666; margin-bottom: 15px;">例如：分类为“甜度”，选项为“多糖,少糖,无糖”</p>
+            <div id="options-rows-container"></div>
+            <button onclick="addOptionRow()" style="width: 100%; margin-bottom: 15px; background: #f0f2f5;">+ 添加分组 (如甜度、冰量)</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="primary" style="flex: 1" onclick="saveOptionsFromEditor()">确认并关闭</button>
+                <button style="flex: 1" onclick="closeOptionsEditor()">取消</button>
+            </div>
         </div>
     </div>
 
@@ -100,7 +121,7 @@
                 <input type="number" id="m-price" placeholder="价格" style="flex: 0.5; min-width: 80px;">
                 <input type="number" id="m-stock" placeholder="库存数量" style="flex: 0.5; min-width: 80px;">
                 <input type="text" id="m-desc" placeholder="描述" style="flex: 2; min-width: 120px;">
-                <input type="text" id="m-options" placeholder="自定义选项 (如: 温度:热,冰|甜度:正常,少糖)" style="flex: 2; min-width: 200px;">
+                <input type="text" id="m-options" placeholder="自定义选项" style="flex: 2; min-width: 150px;" readonly onclick="openOptionsEditor('m-options')">
                 <button class="primary" onclick="addMenuItem()" style="flex: 1; min-width: 100px;">添加商品</button>
             </div>
         </div>
@@ -172,12 +193,64 @@
     <script>
         let adminPassword = '';
         let refreshTimer = null;
+        let currentEditingOptionsInputId = '';
 
         function login() {
             adminPassword = document.getElementById('admin-pw-input').value;
             if (!adminPassword) return;
             document.getElementById('login-overlay').style.display = 'none';
             refreshAll();
+        }
+
+        /* Options Editor Logic */
+        function openOptionsEditor(inputId) {
+            currentEditingOptionsInputId = inputId;
+            const container = document.getElementById('options-rows-container');
+            container.innerHTML = '';
+            
+            const rawValue = document.getElementById(inputId).value;
+            if (rawValue) {
+                const groups = rawValue.split('|');
+                groups.forEach(g => {
+                    const [name, choices] = g.split(':');
+                    addOptionRow(name.trim(), choices.trim());
+                });
+            } else {
+                addOptionRow('', '');
+            }
+            
+            document.getElementById('options-editor').style.display = 'flex';
+        }
+
+        function addOptionRow(label = '', values = '') {
+            const container = document.getElementById('options-rows-container');
+            const row = document.createElement('div');
+            row.className = 'option-row';
+            row.innerHTML = `
+                <input type="text" placeholder="分类(如甜度)" class="opt-label" value="${label}">
+                <input type="text" placeholder="选项(用逗号分隔)" class="opt-values" value="${values}">
+                <button class="danger" onclick="this.parentElement.remove()" style="padding: 5px 10px;">×</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function closeOptionsEditor() {
+            document.getElementById('options-editor').style.display = 'none';
+        }
+
+        function saveOptionsFromEditor() {
+            const container = document.getElementById('options-rows-container');
+            const rows = container.querySelectorAll('.option-row');
+            const parts = [];
+            rows.forEach(row => {
+                const label = row.querySelector('.opt-label').value.trim();
+                const values = row.querySelector('.opt-values').value.trim();
+                if (label && values) {
+                    parts.push(`${label}:${values}`);
+                }
+            });
+            document.getElementById(currentEditingOptionsInputId).value = parts.join('|');
+            closeOptionsEditor();
         }
 
         function showTab(tab) {
@@ -362,7 +435,7 @@
                         <td>
                             <div style="display:flex; flex-direction:column; gap:5px">
                                 <input type="number" value="${m.StockQuantity}" id="stock-${m.Id}" style="width:60px" placeholder="库存">
-                                <input type="text" value="${m.CustomOptions || ''}" id="options-${m.Id}" placeholder="自定义选项" style="width:150px; font-size:12px">
+                                <input type="text" value="${m.CustomOptions || ''}" id="options-${m.Id}" placeholder="无自定义选项" style="width:150px; font-size:12px; cursor:pointer" readonly onclick="openOptionsEditor('options-${m.Id}')">
                                 <button onclick="updateMenu(${m.Id}, ${m.IsAvailable})" style="padding: 4px">保存更新</button>
                             </div>
                         </td>
