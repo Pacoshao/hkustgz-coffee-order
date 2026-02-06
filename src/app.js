@@ -18,7 +18,7 @@ async function initializeDatabase() {
         
         console.log('Checking and initializing database schema...');
 
-        // 1. Create MenuItems table
+        // Step 1: Initialize all tables
         await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'MenuItems')
             BEGIN
@@ -33,30 +33,6 @@ async function initializeDatabase() {
                 );
             END
 
-            -- Seed initial menu items if table is empty
-            IF NOT EXISTS (SELECT 1 FROM MenuItems)
-            BEGIN
-                INSERT INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
-                (N'Latté', 28.00, N'Coffee', N'Classic espresso with steamed milk', 50),
-                (N'Americano', 22.00, N'Coffee', N'Espresso with hot water', 50),
-                (N'Cappuccino', 28.00, N'Coffee', N'Espresso with steamed milk foam', 50),
-                (N'Mocha', 32.00, N'Coffee', N'Espresso with chocolate and milk', 50),
-                (N'Flat White', 30.00, N'Coffee', N'Double espresso with silky microfoam milk', 50);
-            END
-            
-            -- Ensure StockQuantity column exists for existing tables
-            IF EXISTS (SELECT * FROM sys.tables WHERE name = 'MenuItems')
-            BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'StockQuantity')
-                BEGIN
-                    ALTER TABLE MenuItems ADD StockQuantity INT DEFAULT 0;
-                    UPDATE MenuItems SET StockQuantity = 50 WHERE StockQuantity IS NULL OR StockQuantity = 0;
-                END
-            END
-        `);
-
-        // 2. Create Orders table
-        await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Orders')
             BEGIN
                 CREATE TABLE Orders (
@@ -67,10 +43,7 @@ async function initializeDatabase() {
                     CustomerName NVARCHAR(100)
                 );
             END
-        `);
 
-        // 3. Create OrderItems table
-        await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OrderItems')
             BEGIN
                 CREATE TABLE OrderItems (
@@ -81,10 +54,7 @@ async function initializeDatabase() {
                     Price DECIMAL(10, 2) NOT NULL
                 );
             END
-        `);
 
-        // 4. Create SystemSettings table
-        await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SystemSettings')
             BEGIN
                 CREATE TABLE SystemSettings (
@@ -93,13 +63,40 @@ async function initializeDatabase() {
                     IsEnabled BIT DEFAULT 1
                 );
             END
+        `);
+
+        // Step 2: Migrations (Ensure columns exist in existing tables)
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'StockQuantity')
+            BEGIN
+                ALTER TABLE MenuItems ADD StockQuantity INT DEFAULT 0;
+            END
+        `);
+
+        // Step 3: Seed initial data
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT 1 FROM MenuItems)
+            BEGIN
+                INSERT INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
+                (N'Latté', 28.00, N'Coffee', N'Classic espresso with steamed milk', 50),
+                (N'Americano', 22.00, N'Coffee', N'Espresso with hot water', 50),
+                (N'Cappuccino', 28.00, N'Coffee', N'Espresso with steamed milk foam', 50),
+                (N'Mocha', 32.00, N'Coffee', N'Espresso with chocolate and milk', 50),
+                (N'Flat White', 30.00, N'Coffee', N'Double espresso with silky microfoam milk', 50);
+            END
             
-            -- Ensure default settings exist
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'extra_tip')
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('extra_tip', '', 0);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'redirect_url')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'refresh_interval')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1);        `);
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'refresh_interval')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1);
+            
+            -- Set defaults for null stock quantities
+            UPDATE MenuItems SET StockQuantity = 0 WHERE StockQuantity IS NULL;
+        `);
+
+        console.log('Database initialization completed.');
 
         console.log('Database initialization completed.');
     } catch (err) {
