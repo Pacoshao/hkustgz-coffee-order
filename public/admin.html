@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HKUST(GZ) 咖啡系统 - 后台管理</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; max-width: 1200px; margin: 0 auto; background: #f0f2f5; color: #333; line-height: 1.6; }
@@ -46,23 +47,46 @@
         .option-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
         .option-row input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
 
+        .session-inputs { display: flex; flex: 1; gap: 5px; align-items: center; }
+        .session-inputs input { flex: 1; min-width: 0; }
+        .remove-session-btn { padding: 5px 12px; font-weight: bold; }
+
         @media (max-width: 600px) {
             body { padding: 10px; }
-            .card { padding: 15px; }
-            h1 { font-size: 1.5em; }
-            .header-actions { flex-direction: column; align-items: flex-start; }
-            .action-btns { width: 100%; }
-            .action-btns button { flex: 1; text-align: center; }
-            .form-group input[type="number"] { width: 100% !important; }
+            .card { padding: 12px; }
+            h1 { font-size: 1.4em; margin-bottom: 15px; }
+            h2 { font-size: 1.2em; }
+            .tabs { gap: 5px; }
+            .tab-btn { padding: 8px 12px; font-size: 13px; }
+            .header-actions { flex-direction: column; align-items: stretch; gap: 10px; }
+            .action-btns { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+            .action-btns button { font-size: 12px; padding: 10px 5px; }
+            .action-btns .danger { grid-column: span 2; }
+            #last-refresh-time { grid-column: span 2; text-align: center; }
+            
+            .form-group input, .form-group textarea, .form-group select { font-size: 16px; } /* Prevent iOS zoom on focus */
+            .options-box { width: 95%; padding: 15px; }
+            .option-row { flex-direction: column; align-items: stretch; gap: 5px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+            
+            .session-inputs { flex-direction: column; gap: 5px; }
+            .session-inputs input { width: 100%; }
+            .session-inputs .to-text { display: none; } /* Hide "to" text on mobile to save space */
+            .remove-session-btn { align-self: flex-end; }
+            
+            /* Admin Menu Editing Specifics */
+            #menu-list input { width: 100% !important; margin-bottom: 5px; }
+            #menu-list td div { gap: 2px !important; }
         }
     </style>
 </head>
 <body>
     <div id="login-overlay">
-        <div class="card">
+        <div class="card" style="text-align: center; width: 85%; max-width: 350px;">
             <h2>管理员登录</h2>
-            <input type="password" id="admin-pw-input" placeholder="输入后台密码" style="padding:10px; width:200px">
-            <button class="primary" onclick="login()">进入</button>
+            <div class="form-group">
+                <input type="password" id="admin-pw-input" placeholder="输入后台密码" style="padding:12px; width:100%; box-sizing: border-box; font-size: 16px;">
+            </div>
+            <button class="primary" onclick="login()" style="width: 100%; padding: 12px;">进入</button>
         </div>
     </div>
 
@@ -294,15 +318,15 @@
         function addSessionRow(start = '', end = '') {
             const container = document.getElementById('sessions-container');
             const row = document.createElement('div');
-            row.className = 'option-row';
+            row.className = 'option-row session-row-item';
             row.style.marginBottom = '10px';
             row.innerHTML = `
-                <div style="display:flex; flex:1; gap:5px; align-items:center; flex-wrap:wrap">
-                    <input type="datetime-local" class="session-start" value="${start}" style="flex:1">
-                    <span>至</span>
-                    <input type="datetime-local" class="session-end" value="${end}" style="flex:1">
+                <div class="session-inputs">
+                    <input type="datetime-local" class="session-start" value="${start}">
+                    <span class="to-text">至</span>
+                    <input type="datetime-local" class="session-end" value="${end}">
                 </div>
-                <button class="danger" onclick="this.parentElement.remove()" style="padding: 5px 10px;">×</button>
+                <button class="danger remove-session-btn" onclick="this.parentElement.remove()">×</button>
             `;
             container.appendChild(row);
         }
