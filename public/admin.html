@@ -100,6 +100,7 @@
                 <input type="number" id="m-price" placeholder="价格" style="flex: 0.5; min-width: 80px;">
                 <input type="number" id="m-stock" placeholder="库存数量" style="flex: 0.5; min-width: 80px;">
                 <input type="text" id="m-desc" placeholder="描述" style="flex: 2; min-width: 120px;">
+                <input type="text" id="m-options" placeholder="自定义选项 (如: 甜度:常温,加冰|糖度:多糖,少糖)" style="flex: 2; min-width: 200px;">
                 <button class="primary" onclick="addMenuItem()" style="flex: 1; min-width: 100px;">添加商品</button>
             </div>
         </div>
@@ -107,7 +108,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>名称</th><th>价格</th><th>描述</th><th>库存</th><th>状态</th><th>操作</th>
+                        <th>名称</th><th>价格</th><th>描述</th><th>库存/选项</th><th>状态</th><th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="menu-list"></tbody>
@@ -138,6 +139,31 @@
                 <label>后台记录自动刷新间隔 (秒)</label>
                 <input type="number" id="refresh-interval" style="width: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 10px;" min="5" value="30">
                 <p style="font-size: 12px; color: #999; margin-top: 5px;">建议 10s 以上以平衡实时性与负载。</p>
+            </div>
+        </div>
+        <div class="card" style="margin-top: 20px;">
+            <h3>⏰ 营业时间设置</h3>
+            <div class="form-group">
+                <label><input type="checkbox" id="hours-enabled"> 启用营业时间限制</label>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label>开始时间</label>
+                    <input type="time" id="hours-start">
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label>结束时间</label>
+                    <input type="time" id="hours-end">
+                </div>
+            </div>
+            <p style="font-size: 12px; color: #999;">超出此时间段，系统将禁止用户提交新点单。</p>
+        </div>
+        <div class="card" style="margin-top: 20px;">
+            <h3>📅 特定营业日期 (日期白名单)</h3>
+            <div class="form-group">
+                <label><input type="checkbox" id="dates-enabled"> 仅允许在以下日期点单</label>
+                <textarea id="dates-list" style="width: 100%; height: 80px; margin-top: 10px; display: block; border: 1px solid #ddd; border-radius: 8px; padding: 10px;" placeholder="例如: 2026-02-06, 2026-02-14 (以逗号分隔)"></textarea>
+                <p style="font-size: 12px; color: #999; margin-top: 5px;">如果开启此项，只有在列表中的日期才允许下单。格式：YYYY-MM-DD</p>
             </div>
         </div>
         <button class="primary" style="margin-top: 20px; width: 100%; padding: 12px;" onclick="saveSettings()">保存所有设置</button>
@@ -194,6 +220,16 @@
                     } else if (s.SettingKey === 'refresh_interval') {
                         document.getElementById('refresh-interval').value = s.SettingValue || '30';
                         setupAutoRefresh(parseInt(s.SettingValue || '30'));
+                    } else if (s.SettingKey === 'business_hours_start') {
+                        document.getElementById('hours-start').value = s.SettingValue || '08:00';
+                    } else if (s.SettingKey === 'business_hours_end') {
+                        document.getElementById('hours-end').value = s.SettingValue || '20:00';
+                    } else if (s.SettingKey === 'business_hours_enabled') {
+                        document.getElementById('hours-enabled').checked = s.IsEnabled;
+                    } else if (s.SettingKey === 'business_dates_list') {
+                        document.getElementById('dates-list').value = s.SettingValue || '';
+                    } else if (s.SettingKey === 'business_dates_enabled') {
+                        document.getElementById('dates-enabled').checked = s.IsEnabled;
                     }
                 });
             } catch (e) {
@@ -225,6 +261,31 @@
                     SettingKey: 'refresh_interval',
                     SettingValue: document.getElementById('refresh-interval').value,
                     IsEnabled: true
+                },
+                {
+                    SettingKey: 'business_hours_start',
+                    SettingValue: document.getElementById('hours-start').value,
+                    IsEnabled: true
+                },
+                {
+                    SettingKey: 'business_hours_end',
+                    SettingValue: document.getElementById('hours-end').value,
+                    IsEnabled: true
+                },
+                {
+                    SettingKey: 'business_hours_enabled',
+                    SettingValue: '1',
+                    IsEnabled: document.getElementById('hours-enabled').checked
+                },
+                {
+                    SettingKey: 'business_dates_list',
+                    SettingValue: document.getElementById('dates-list').value,
+                    IsEnabled: true
+                },
+                {
+                    SettingKey: 'business_dates_enabled',
+                    SettingValue: '1',
+                    IsEnabled: document.getElementById('dates-enabled').checked
                 }
             ];
             try {
@@ -295,17 +356,22 @@
                 const data = await res.json();
                 document.getElementById('menu-list').innerHTML = data.map(m => `
                     <tr>
-                        <td>${m.Name}</td><td>¥${m.Price.toFixed(2)}</td><td>${m.Description || ''}</td>
+                        <td><input type="text" value="${m.Name}" id="name-${m.Id}" style="width:100px"></td>
+                        <td><input type="number" value="${m.Price}" id="price-${m.Id}" style="width:60px"></td>
+                        <td><input type="text" value="${m.Description || ''}" id="desc-${m.Id}" style="width:120px"></td>
                         <td>
-                            <input type="number" value="${m.StockQuantity}" style="width: 60px" id="stock-${m.Id}">
-                            <button onclick="updateStock(${m.Id}, '${m.Name.replace(/'/g, "\\'")}', ${m.Price}, ${m.IsAvailable}, '${(m.Description || '').replace(/'/g, "\\'")}')">更新</button>
+                            <div style="display:flex; flex-direction:column; gap:5px">
+                                <input type="number" value="${m.StockQuantity}" id="stock-${m.Id}" style="width:60px" placeholder="库存">
+                                <input type="text" value="${m.CustomOptions || ''}" id="options-${m.Id}" placeholder="自定义选项" style="width:150px; font-size:12px">
+                                <button onclick="updateMenu(${m.Id}, ${m.IsAvailable})" style="padding: 4px">保存更新</button>
+                            </div>
                         </td>
                         <td style="color: ${m.StockQuantity > 0 && m.IsAvailable ? 'green' : 'red'}">
                             ${m.IsAvailable ? (m.StockQuantity > 0 ? '在售' : '已售罄') : '已下架'}
                         </td>
                         <td>
-                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable}, '${m.Name.replace(/'/g, "\\'")}', ${m.Price}, ${m.StockQuantity}, '${(m.Description || '').replace(/'/g, "\\'")}')">${m.IsAvailable ? '下架' : '上架'}</button>
-                            <button class="danger" onclick="deleteMenu(${m.Id})">从列表删除</button>
+                            <button onclick="toggleMenu(${m.Id}, ${m.IsAvailable})">${m.IsAvailable ? '下架' : '上架'}</button>
+                            <button class="danger" onclick="deleteMenu(${m.Id})">删除</button>
                         </td>
                     </tr>
                 `).join('');
@@ -314,13 +380,29 @@
             }
         }
 
-        async function updateStock(id, name, price, isAvailable, description) {
+        async function updateMenu(id, isAvailable) {
+            const name = document.getElementById('name-' + id).value;
+            const price = document.getElementById('price-' + id).value;
+            const description = document.getElementById('desc-' + id).value;
             const stockQuantity = document.getElementById('stock-' + id).value;
+            const customOptions = document.getElementById('options-' + id).value;
             try {
-                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable, stockQuantity, description });
-                alert('库存已更新');
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable, stockQuantity, description, customOptions });
+                alert('已更新');
                 fetchMenu();
             } catch (e) { alert('更新失败: ' + e.message); }
+        }
+
+        async function toggleMenu(id, currentStatus) {
+            const name = document.getElementById('name-' + id).value;
+            const price = document.getElementById('price-' + id).value;
+            const description = document.getElementById('desc-' + id).value;
+            const stockQuantity = document.getElementById('stock-' + id).value;
+            const customOptions = document.getElementById('options-' + id).value;
+            try {
+                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus, stockQuantity, description, customOptions });
+                fetchMenu();
+            } catch (e) { alert('操作失败: ' + e.message); }
         }
 
         async function completeOrder(id) {
@@ -336,21 +418,16 @@
                 const price = document.getElementById('m-price').value;
                 const description = document.getElementById('m-desc').value || '';
                 const stockQuantity = document.getElementById('m-stock').value || 0;
+                const customOptions = document.getElementById('m-options').value || '';
                 if (!name || !price) return alert('请填写名称和价格');
-                await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee', stockQuantity });
+                await api('/api/admin/menu', 'POST', { name, price, description, category: 'Coffee', stockQuantity, customOptions });
                 fetchMenu();
                 document.getElementById('m-name').value = '';
                 document.getElementById('m-price').value = '';
                 document.getElementById('m-desc').value = '';
                 document.getElementById('m-stock').value = '';
+                document.getElementById('m-options').value = '';
             } catch (e) { alert('添加失败: ' + e.message); }
-        }
-
-        async function toggleMenu(id, currentStatus, name, price, stockQuantity, description) {
-            try {
-                await api(`/api/admin/menu/${id}`, 'PUT', { name, price, isAvailable: !currentStatus, stockQuantity, description });
-                fetchMenu();
-            } catch (e) { alert('操作失败: ' + e.message); }
         }
 
         async function deleteMenu(id) {

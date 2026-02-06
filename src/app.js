@@ -29,7 +29,8 @@ async function initializeDatabase() {
                     Description NVARCHAR(255),
                     Category NVARCHAR(50),
                     IsAvailable BIT DEFAULT 1,
-                    StockQuantity INT DEFAULT 0
+                    StockQuantity INT DEFAULT 0,
+                    CustomOptions NVARCHAR(MAX)
                 );
             END
 
@@ -51,7 +52,8 @@ async function initializeDatabase() {
                     OrderId INT FOREIGN KEY REFERENCES Orders(Id),
                     MenuItemId INT FOREIGN KEY REFERENCES MenuItems(Id),
                     Quantity INT NOT NULL,
-                    Price DECIMAL(10, 2) NOT NULL
+                    Price DECIMAL(10, 2) NOT NULL,
+                    SelectedOptions NVARCHAR(MAX)
                 );
             END
 
@@ -70,6 +72,14 @@ async function initializeDatabase() {
             IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'StockQuantity')
             BEGIN
                 ALTER TABLE MenuItems ADD StockQuantity INT DEFAULT 0;
+            END
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'CustomOptions')
+            BEGIN
+                ALTER TABLE MenuItems ADD CustomOptions NVARCHAR(MAX);
+            END
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('OrderItems') AND name = 'SelectedOptions')
+            BEGIN
+                ALTER TABLE OrderItems ADD SelectedOptions NVARCHAR(MAX);
             END
         `);
 
@@ -91,6 +101,16 @@ async function initializeDatabase() {
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'refresh_interval')
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_hours_start')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_hours_start', '08:00', 1);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_hours_end')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_hours_end', '20:00', 1);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_hours_enabled')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_hours_enabled', '1', 0);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_dates_enabled')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_dates_enabled', '1', 0);
+            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_dates_list')
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_dates_list', '', 1);
             
             -- Set defaults for null stock quantities
             UPDATE MenuItems SET StockQuantity = 0 WHERE StockQuantity IS NULL;
@@ -132,6 +152,35 @@ app.post('/api/orders', async (req, res) => {
     const { code, items, totalPrice } = req.body;
     try {
         const pool = await getPool();
+
+        // Check Business Hours
+        const settingsResult = await pool.request().query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey LIKE 'business_%'");
+        const settings = {};
+        settingsResult.recordset.forEach(s => settings[s.SettingKey] = s);
+
+        const now = new Date();
+        // UTC+8 adjustment if necessary, but using server local time for simplicity
+        const todayStr = now.getFullYear() + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0');
+
+        // 1. Check Specific Business Dates
+        if (settings['business_dates_enabled']?.IsEnabled) {
+            const allowedDates = (settings['business_dates_list']?.SettingValue || '').split(',').map(d => d.trim());
+            if (!allowedDates.includes(todayStr)) {
+                return res.status(403).send(`今天 (${todayStr}) 不在营业日期内。`);
+            }
+        }
+
+        // 2. Check Daily Business Hours
+        if (settings['business_hours_enabled']?.IsEnabled) {
+            const currentStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            const start = settings['business_hours_start']?.SettingValue || '00:00';
+            const end = settings['business_hours_end']?.SettingValue || '23:59';
+
+            if (currentStr < start || currentStr > end) {
+                return res.status(403).send(`不在营业时间内。点单开放时间: ${start} - ${end}`);
+            }
+        }
+
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
 
@@ -179,7 +228,8 @@ app.post('/api/orders', async (req, res) => {
                     .input('menuItemId', sql.Int, item.id)
                     .input('quantity', sql.Int, item.quantity)
                     .input('price', sql.Decimal(10, 2), item.price)
-                    .query('INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, Price) VALUES (@orderId, @menuItemId, @quantity, @price)');
+                    .input('selectedOptions', sql.NVarChar, item.selectedOptions || '')
+                    .query('INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, Price, SelectedOptions) VALUES (@orderId, @menuItemId, @quantity, @price, @selectedOptions)');
             }
 
             await transaction.commit();
@@ -199,7 +249,9 @@ app.get('/api/orders', adminAuth, async (req, res) => {
         const pool = await getPool();
         const result = await pool.request().query(`
             SELECT o.Id, o.CustomerName, o.OrderDate, o.Status, o.TotalPrice,
-            (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), ', ') 
+            (SELECT String_Agg(mi.Name + 
+                CASE WHEN ISNULL(oi.SelectedOptions, '') = '' THEN '' ELSE ' (' + oi.SelectedOptions + ')' END +
+                ' x' + Cast(oi.Quantity as varchar), ', ') 
              FROM OrderItems oi 
              JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
              WHERE oi.OrderId = o.Id) as ItemSummary
@@ -257,7 +309,9 @@ app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
         const pool = await getPool();
         const result = await pool.request().query(`
             SELECT o.Id, o.OrderDate, o.CustomerName, o.Status, o.TotalPrice,
-            (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), '; ') 
+            (SELECT String_Agg(mi.Name + 
+                CASE WHEN ISNULL(oi.SelectedOptions, '') = '' THEN '' ELSE ' (' + oi.SelectedOptions + ')' END +
+                ' x' + Cast(oi.Quantity as varchar), '; ') 
              FROM OrderItems oi 
              JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
              WHERE oi.OrderId = o.Id) as Items
@@ -342,7 +396,9 @@ app.get('/api/public/orders', async (req, res) => {
             .input('code', sql.NVarChar, code)
             .query(`
                 SELECT o.Id, o.OrderDate, o.Status, o.TotalPrice,
-                (SELECT String_Agg(mi.Name + ' x' + Cast(oi.Quantity as varchar), ', ') 
+                (SELECT String_Agg(mi.Name + 
+                    CASE WHEN ISNULL(oi.SelectedOptions, '') = '' THEN '' ELSE ' (' + oi.SelectedOptions + ')' END +
+                    ' x' + Cast(oi.Quantity as varchar), ', ') 
                  FROM OrderItems oi 
                  JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
                  WHERE oi.OrderId = o.Id) as ItemSummary
@@ -371,7 +427,7 @@ app.get('/api/admin/menu', adminAuth, async (req, res) => {
 
 // Add Menu Item
 app.post('/api/admin/menu', adminAuth, async (req, res) => {
-    const { name, price, description, category, stockQuantity } = req.body;
+    const { name, price, description, category, stockQuantity, customOptions } = req.body;
     try {
         const pool = await getPool();
         await pool.request()
@@ -380,7 +436,8 @@ app.post('/api/admin/menu', adminAuth, async (req, res) => {
             .input('description', sql.NVarChar, description)
             .input('category', sql.NVarChar, category)
             .input('stockQuantity', sql.Int, stockQuantity || 0)
-            .query('INSERT INTO MenuItems (Name, Price, Description, Category, StockQuantity) VALUES (@name, @price, @description, @category, @stockQuantity)');
+            .input('customOptions', sql.NVarChar, customOptions || '')
+            .query('INSERT INTO MenuItems (Name, Price, Description, Category, StockQuantity, CustomOptions) VALUES (@name, @price, @description, @category, @stockQuantity, @customOptions)');
         res.status(201).send('Item added');
     } catch (err) {
         res.status(500).send(err.message);
@@ -390,7 +447,7 @@ app.post('/api/admin/menu', adminAuth, async (req, res) => {
 // Update Menu Item
 app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
-    const { name, price, description, category, isAvailable, stockQuantity } = req.body;
+    const { name, price, description, category, isAvailable, stockQuantity, customOptions } = req.body;
     try {
         const pool = await getPool();
         await pool.request()
@@ -401,7 +458,8 @@ app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
             .input('category', sql.NVarChar, category || 'Coffee')
             .input('isAvailable', sql.Bit, isAvailable)
             .input('stockQuantity', sql.Int, stockQuantity)
-            .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable, StockQuantity = @stockQuantity WHERE Id = @id');
+            .input('customOptions', sql.NVarChar, customOptions || '')
+            .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable, StockQuantity = @stockQuantity, CustomOptions = @customOptions WHERE Id = @id');
         res.send('Item updated');
     } catch (err) {
         res.status(500).send(err.message);
