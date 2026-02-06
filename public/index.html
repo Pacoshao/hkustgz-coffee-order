@@ -5,38 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HKUST(GZ) 咖啡点单系统</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f7; }
-        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
-        .menu-item { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .menu-item h3 { margin: 0 0 10px 0; }
-        .menu-item p { color: #666; font-size: 0.9em; }
-        .price { font-weight: bold; color: #0071e3; }
-        .cart { position: sticky; bottom: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); margin-top: 40px; }
-        button { background: #0071e3; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 15px; background-color: #f5f5f7; color: #333; }
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        .menu-item { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; }
+        .menu-item h3 { margin: 0 0 8px 0; font-size: 1.1em; }
+        .menu-item p { color: #666; font-size: 0.85em; margin: 0 0 10px 0; flex-grow: 1; }
+        .price { font-weight: bold; color: #0071e3; font-size: 1.1em; margin-bottom: 5px !important; }
+        .cart { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); margin-top: 30px; }
+        .sticky-cart { position: sticky; bottom: 15px; z-index: 100; box-shadow: 0 -5px 25px rgba(0,0,0,0.15); border: 1px solid #eee; }
+        button { background: #0071e3; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: background 0.2s; -webkit-tap-highlight-color: transparent; }
         button:hover { background: #0077ed; }
-        .admin-link { display: block; margin-bottom: 20px; color: #666; text-decoration: none; }
+        button:active { transform: scale(0.98); }
+        input[type="text"] { padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+        input[type="text"]:focus { border-color: #0071e3; }
+        
+        @media (max-width: 480px) {
+            h1 { font-size: 1.5em; text-align: center; }
+            .menu-grid { grid-template-columns: 1fr; }
+            .cart input[type="text"] { width: 100% !important; margin-bottom: 10px; box-sizing: border-box; }
+            .cart button { width: 100%; padding: 12px; }
+            .menu-item { padding: 20px; }
+        }
     </style>
 </head>
 <body>
     <h1>☕ HKUST(GZ) Coffee</h1>
     
-    <div id="extra-tip-banner" style="display:none; background: #fff3cd; color: #856404; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ffeeba; white-space: pre-wrap;"></div>
+    <div id="extra-tip-banner" style="display:none; background: #fff3cd; color: #856404; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ffeeba; white-space: pre-wrap; font-size: 14px; line-height: 1.4;"></div>
 
     <div id="menu" class="menu-grid">正在加载菜单...</div>
 
-    <div class="cart">
+    <div class="cart sticky-cart">
         <h2>点单篮子</h2>
         <div id="cart-items"></div>
         <hr>
         <p>总计: <span id="total-price">0.00</span> 元</p>
-        <input type="text" id="customer-code" placeholder="设置你的点单“暗号”" style="padding: 8px; width: 200px; margin-right: 10px;">
-        <button onclick="placeOrder()">提交点单</button>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <input type="text" id="customer-code" placeholder="设置你的点单“暗号”" style="padding: 10px; flex: 1;">
+            <button onclick="placeOrder()" style="flex: 0.5;">提交点单</button>
+        </div>
     </div>
 
     <div class="cart" style="margin-top:20px; border-top: 1px solid #ddd; background: #eef2f7;">
         <h3>🔍 找回我的点单</h3>
-        <input type="text" id="search-code" placeholder="输入暗号查看进度" style="padding: 8px; width: 200px; margin-right: 10px;">
-        <button onclick="fetchMyOrdersByCode()">查询/撤单</button>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <input type="text" id="search-code" placeholder="输入暗号查看进度" style="padding: 10px;">
+            <button onclick="fetchMyOrdersByCode()">查询/撤单</button>
+        </div>
         <div id="my-orders-list" style="margin-top: 15px;">输入暗号查进度...</div>
     </div>
 

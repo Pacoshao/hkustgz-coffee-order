@@ -4,23 +4,50 @@
     <meta charset="UTF-8">
     <title>HKUST(GZ) 咖啡系统 - 后台管理</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background: #f0f2f5; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h1, h2 { color: #333; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border-bottom: 1px solid #ddd; padding: 12px; text-align: left; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; max-width: 1200px; margin: 0 auto; background: #f0f2f5; color: #333; line-height: 1.6; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        h1 { font-size: 1.8em; margin-bottom: 20px; }
+        h2 { font-size: 1.4em; margin-bottom: 15px; }
+        
+        /* Responsive Table */
+        .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; border-radius: 8px; border: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { border-bottom: 1px solid #eee; padding: 12px; text-align: left; font-size: 14px; }
+        th { background: #fafafa; font-weight: 600; color: #666; }
+        
         .status-Pending { color: #f39c12; font-weight: bold; }
-        .status-Completed { color: #27ae60; }
-        button { padding: 6px 12px; cursor: pointer; border-radius: 4px; border: 1px solid #ddd; }
+        .status-Completed { color: #27ae60; font-weight: bold; }
+        .status-Cancelled { color: #999; }
+
+        button { padding: 8px 14px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; transition: all 0.2s; white-space: nowrap; }
         button.primary { background: #0071e3; color: white; border: none; }
         button.danger { background: #ff3b30; color: white; border: none; }
-        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .tab-btn { padding: 10px 20px; background: #ddd; border: none; cursor: pointer; }
-        .tab-btn.active { background: #0071e3; color: white; }
-        .form-group { margin-bottom: 10px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input { width: 100%; padding: 8px; margin-right: 5px; }
+        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.98); }
+
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f0f2f5; display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; -webkit-overflow-scrolling: touch; }
+        .tab-btn { padding: 10px 18px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; white-space: nowrap; font-weight: 500; color: #666; }
+        .tab-btn.active { background: #0071e3; color: white; border-color: #0071e3; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
+        .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; }
+        .form-group input:focus { border-color: #0071e3; }
+
+        .header-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
+        .action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .card { padding: 15px; }
+            h1 { font-size: 1.5em; }
+            .header-actions { flex-direction: column; align-items: flex-start; }
+            .action-btns { width: 100%; }
+            .action-btns button { flex: 1; text-align: center; }
+            .form-group input[type="number"] { width: 100% !important; }
+        }
     </style>
 </head>
 <body>
@@ -42,46 +69,50 @@
 
     <!-- 点单管理 -->
     <div id="section-orders" class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="header-actions">
             <h2>📋 点单记录</h2>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <span id="last-refresh-time" style="font-size: 12px; color: #999;"></span>
+            <div class="action-btns">
+                <span id="last-refresh-time" style="font-size: 12px; color: #999; align-self: center;"></span>
                 <button class="primary" onclick="fetchOrders()">立即刷新</button>
                 <button class="primary" onclick="exportOrders()">导出 CSV</button>
                 <button class="danger" onclick="clearAllOrders()">清空所有记录</button>
             </div>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th><th>点单暗号</th><th>内容</th><th>金额</th><th>状态</th><th>操作</th>
-                </tr>
-            </thead>
-            <tbody id="orders-list"></tbody>
-        </table>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th><th>点单暗号</th><th>内容</th><th>金额</th><th>状态</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="orders-list"></tbody>
+            </table>
+        </div>
     </div>
 
     <!-- 菜单管理 -->
     <div id="section-menu" class="card" style="display:none">
         <h2>🍔 菜单管理</h2>
-        <div class="card" style="background: #f9f9f9">
-            <h3>添加新品</h3>
+        <div class="card" style="background: #f9f9f9; padding: 15px;">
+            <h3 style="margin-top:0">添加新品</h3>
             <div class="form-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="text" id="m-name" placeholder="名称" style="flex: 1; min-width: 150px;">
+                <input type="text" id="m-name" placeholder="名称" style="flex: 1; min-width: 120px;">
                 <input type="number" id="m-price" placeholder="价格" style="flex: 0.5; min-width: 80px;">
                 <input type="number" id="m-stock" placeholder="库存数量" style="flex: 0.5; min-width: 80px;">
-                <input type="text" id="m-desc" placeholder="描述" style="flex: 2; min-width: 200px;">
-                <button class="primary" onclick="addMenuItem()">添加</button>
+                <input type="text" id="m-desc" placeholder="描述" style="flex: 2; min-width: 120px;">
+                <button class="primary" onclick="addMenuItem()" style="flex: 1; min-width: 100px;">添加商品</button>
             </div>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>名称</th><th>价格</th><th>描述</th><th>库存</th><th>状态</th><th>操作</th>
-                </tr>
-            </thead>
-            <tbody id="menu-list"></tbody>
-        </table>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>名称</th><th>价格</th><th>描述</th><th>库存</th><th>状态</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="menu-list"></tbody>
+            </table>
+        </div>
     </div>
 
     <!-- 系统设置 -->
@@ -105,11 +136,11 @@
             <h3>自动刷新设置</h3>
             <div class="form-group">
                 <label>后台记录自动刷新间隔 (秒)</label>
-                <input type="number" id="refresh-interval" style="margin-top: 10px; display: block; width: 100px; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" min="5" value="30">
-                <p style="font-size: 12px; color: #999; margin-top: 5px;">设置较短的时间可以更实时地看到新订单，但会增加服务器压力。</p>
+                <input type="number" id="refresh-interval" style="width: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 10px;" min="5" value="30">
+                <p style="font-size: 12px; color: #999; margin-top: 5px;">建议 10s 以上以平衡实时性与负载。</p>
             </div>
         </div>
-        <button class="primary" style="margin-top: 20px;" onclick="saveSettings()">保存所有设置</button>
+        <button class="primary" style="margin-top: 20px; width: 100%; padding: 12px;" onclick="saveSettings()">保存所有设置</button>
     </div>
 
     <script>
