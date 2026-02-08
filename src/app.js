@@ -153,10 +153,6 @@ app.post('/api/orders', async (req, res) => {
         settingsResult.recordset.forEach(s => settings[s.SettingKey] = s);
 
         const now = new Date();
-        // Convert to China Time (UTC+8) for simple business hours check
-        const chinaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (8 * 3600000));
-        const currentTImeStr = chinaTime.getHours().toString().padStart(2, '0') + ':' + chinaTime.getMinutes().toString().padStart(2, '0');
-
         let isClosed = false;
         let reason = "当前不在营业时段内。";
 
@@ -169,8 +165,10 @@ app.post('/api/orders', async (req, res) => {
 
             const isOpenSession = sessions.some(s => {
                 if (!s.start || !s.end) return false;
-                const start = new Date(s.start);
-                const end = new Date(s.end);
+                // html datetime-local inputs are "YYYY-MM-DDTHH:mm". 
+                // We append "+08:00" to ensure they are interpreted as China Time regardless of server locale.
+                const start = new Date(s.start + ":00+08:00");
+                const end = new Date(s.end + ":00+08:00");
                 return now >= start && now <= end;
             });
 
@@ -200,9 +198,11 @@ app.post('/api/orders', async (req, res) => {
             }
 
             // 2. Generate Automatic Order Number (C001 format)
-            const todayStart = new Date(now);
-            todayStart.setHours(0,0,0,0);
-            // Use China Time for date boundary if possible, but keeping it simple with server local date is usually fine for daily reset
+            // Calculate China Midnight (UTC+8)
+            const chinaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (8 * 3600000));
+            const y = chinaTime.getFullYear(), m = chinaTime.getMonth(), d = chinaTime.getDate();
+            const todayStart = new Date(Date.UTC(y, m, d, 0, 0, 0) - (8 * 3600000));
+            
             const countResult = await request
                 .input('todayStart', sql.DateTime, todayStart)
                 .query("SELECT COUNT(*) as count FROM Orders WHERE OrderDate >= @todayStart AND CustomerName LIKE 'C%'");

@@ -162,7 +162,10 @@
             }
         };
 
-        let currentLang = localStorage.getItem('lang') || 'zh-CN';
+        let currentLang = localStorage.getItem('lang');
+        if (!currentLang) {
+            currentLang = navigator.language.startsWith('en') ? 'en' : 'zh-CN';
+        }
         let cart = [];
         let menuData = [];
         let appSettings = {};
@@ -237,8 +240,8 @@
                 
                 if (sessions.length > 0) {
                     const displayList = sessions.map(s => {
-                        const start = new Date(s.start);
-                        const end = new Date(s.end);
+                        const start = new Date(s.start + ":00+08:00");
+                        const end = new Date(s.end + ":00+08:00");
                         const fmt = d => `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
                         return `${fmt(start)} ~ ${fmt(end)}`;
                     });
@@ -247,8 +250,8 @@
 
                     const currentSession = sessions.find(s => {
                         if (!s.start || !s.end) return false;
-                        const start = new Date(s.start);
-                        const end = new Date(s.end);
+                        const start = new Date(s.start + ":00+08:00");
+                        const end = new Date(s.end + ":00+08:00");
                         return now >= start && now <= end;
                     });
 

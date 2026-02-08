@@ -325,7 +325,10 @@
             }
         };
 
-        let currentLang = localStorage.getItem('lang') || 'zh-CN';
+        let currentLang = localStorage.getItem('lang');
+        if (!currentLang) {
+            currentLang = navigator.language.startsWith('en') ? 'en' : 'zh-CN';
+        }
         let adminPassword = '';
         let refreshTimer = null;
         let currentEditingOptionsInputId = '';
