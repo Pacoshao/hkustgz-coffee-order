@@ -6,6 +6,7 @@
     <title>HKUST(GZ) 咖啡点单系统</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 15px; background-color: #f5f5f7; color: #333; }
+        .lang-toggle { position: absolute; top: 15px; right: 15px; }
         .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
         .menu-item { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; }
         .menu-item h3 { margin: 0 0 8px 0; font-size: 1.1em; }
@@ -21,6 +22,7 @@
         
         @media (max-width: 480px) {
             h1 { font-size: 1.5em; text-align: center; }
+            .lang-toggle { top: 10px; right: 10px; }
             .menu-grid { grid-template-columns: 1fr; }
             .cart input[type="text"] { width: 100% !important; margin-bottom: 10px; box-sizing: border-box; }
             .cart button { width: 100%; padding: 12px; }
@@ -39,13 +41,16 @@
     </style>
 </head>
 <body>
+    <div class="lang-toggle">
+        <button onclick="toggleLang()" id="lang-btn" style="background:#8e8e93; font-size: 12px; padding: 5px 10px;">English</button>
+    </div>
     <div id="option-modal" class="modal-overlay">
         <div class="modal">
-            <h3 id="modal-item-name">选择选项</h3>
+            <h3 id="modal-item-name" data-i18n="select_options">选择选项</h3>
             <div id="modal-options"></div>
             <div style="display:flex; gap:10px; margin-top:20px">
-                <button onclick="closeModal()" style="background:#8e8e93; flex:1">取消</button>
-                <button onclick="confirmOptions()" style="flex:2">加入蓝子</button>
+                <button onclick="closeModal()" style="background:#8e8e93; flex:1" data-i18n="cancel">取消</button>
+                <button onclick="confirmOptions()" style="flex:2" data-i18n="add_to_cart">加入蓝子</button>
             </div>
         </div>
     </div>
@@ -55,37 +60,140 @@
     <div id="extra-tip-banner" style="display:none; background: #fff3cd; color: #856404; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ffeeba; white-space: pre-wrap; font-size: 14px; line-height: 1.4;"></div>
 
     <div id="sessions-banner" style="display:none; background: #e6fffa; color: #2c7a7b; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #b2f5ea; font-size: 14px; text-align: center;">
-        ⌛ 营业时段：<span id="sessions-display"></span>
+        ⌛ <span data-i18n="business_hours">营业时段</span>：<span id="sessions-display"></span>
     </div>
 
-    <div id="menu" class="menu-grid">正在加载菜单...</div>
+    <div id="menu" class="menu-grid" data-i18n="loading_menu">正在加载菜单...</div>
 
     <div class="cart sticky-cart">
-        <h2>点单篮子</h2>
+        <h2 data-i18n="cart_title">点单篮子</h2>
         <div id="cart-items"></div>
         <hr>
-        <p>总计: <span id="total-price">0.00</span> 元</p>
+        <p><span data-i18n="total">总计</span>: <span id="total-price">0.00</span> <span data-i18n="currency">元</span></p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <input type="text" id="customer-code" placeholder="设置你的点单“暗号”" style="padding: 10px; flex: 1;">
-            <button onclick="placeOrder()" style="flex: 0.5;">提交点单</button>
+            <button onclick="placeOrder()" style="flex: 1;" id="place-order-btn" data-i18n="submit_order">提交点单</button>
         </div>
     </div>
 
     <div class="cart" style="margin-top:20px; border-top: 1px solid #ddd; background: #eef2f7;">
-        <h3>🔍 找回我的点单</h3>
+        <h3>🔍 <span data-i18n="search_order_title">找回我的点单</span></h3>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <input type="text" id="search-code" placeholder="输入暗号查看进度" style="padding: 10px;">
-            <button onclick="fetchMyOrdersByCode()">查询/撤单</button>
+            <input type="text" id="search-code" placeholder="输入点单号(如C001)查看进度" data-i18n-placeholder="search_placeholder" style="padding: 10px;">
+            <button onclick="fetchMyOrdersByCode()" data-i18n="search_btn">查询/撤单</button>
         </div>
-        <div id="my-orders-list" style="margin-top: 15px;">输入暗号查进度...</div>
+        <div id="my-orders-list" style="margin-top: 15px;" data-i18n="search_initial">输入点单号查进度...</div>
     </div>
 
     <script>
+        const i18n = {
+            'zh-CN': {
+                select_options: '选择选项',
+                cancel: '取消',
+                add_to_cart: '加入篮子',
+                business_hours: '营业时段',
+                loading_menu: '正在加载菜单...',
+                cart_title: '点单篮子',
+                total: '总计',
+                currency: '元',
+                submit_order: '提交点单',
+                search_order_title: '找回我的点单',
+                search_placeholder: '输入点单号(如C001)查看进度',
+                search_btn: '查询/撤单',
+                search_initial: '输入点单号查进度...',
+                out_of_stock: '已售罄',
+                stock_left: '剩余库存',
+                unable_to_buy: '无法购买',
+                select_spec: '选规格',
+                remove: '移除',
+                empty_cart: '篮子是空的',
+                order_success: '点单成功！您的点单号是：',
+                order_failed: '点单失败',
+                stock_insufficient: '抱歉，该商品库存不足',
+                not_in_business: '不在营业时段',
+                hours_not_set: '时段未设置',
+                server_error: '服务器错误',
+                status_pending: '制作中',
+                status_completed: '已完成/可取',
+                status_cancelled: '已撤单',
+                cancel_confirm: '确定要撤回此单吗？',
+                cancel_success: '已撤单',
+                items: '内容',
+                date: '日期',
+                status: '状态',
+                price: '价格',
+                no_records: '未找到该点单号对应的记录。'
+            },
+            'en': {
+                select_options: 'Select Options',
+                cancel: 'Cancel',
+                add_to_cart: 'Add to Cart',
+                business_hours: 'Business Hours',
+                loading_menu: 'Loading menu...',
+                cart_title: 'Your Cart',
+                total: 'Total',
+                currency: 'Yuan',
+                submit_order: 'Place Order',
+                search_order_title: 'Find My Orders',
+                search_placeholder: 'Enter order number (e.g., C001)',
+                search_btn: 'Check Status / Cancel',
+                search_initial: 'Enter order number to check status...',
+                out_of_stock: 'Sold Out',
+                stock_left: 'Stock',
+                unable_to_buy: 'Unavailable',
+                select_spec: 'Options',
+                remove: 'Remove',
+                empty_cart: 'Cart is empty',
+                order_success: 'Success! Your order number is: ',
+                order_failed: 'Order failed',
+                stock_insufficient: 'Sorry, insufficient stock',
+                not_in_business: 'Closed',
+                hours_not_set: 'Hours not set',
+                server_error: 'Server error',
+                status_pending: 'Pending',
+                status_completed: 'Completed/Ready',
+                status_cancelled: 'Cancelled',
+                cancel_confirm: 'Are you sure you want to cancel this order?',
+                cancel_success: 'Cancelled',
+                items: 'Items',
+                date: 'Date',
+                status: 'Status',
+                price: 'Price',
+                no_records: 'No records found for this order number.'
+            }
+        };
+
+        let currentLang = localStorage.getItem('lang') || 'zh-CN';
         let cart = [];
         let menuData = [];
         let appSettings = {};
         let currentItemForOptions = null;
         let selectedOptionsMap = {};
+
+        function toggleLang() {
+            currentLang = currentLang === 'zh-CN' ? 'en' : 'zh-CN';
+            localStorage.setItem('lang', currentLang);
+            updateUI();
+        }
+
+        function t(key) {
+            return i18n[currentLang][key] || key;
+        }
+
+        function updateUI() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                el.innerText = t(key);
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                el.placeholder = t(key);
+            });
+            const langBtn = document.getElementById('lang-btn');
+            if (langBtn) langBtn.innerText = currentLang === 'zh-CN' ? 'English' : '中文';
+            renderMenu();
+            updateCart();
+            applySettings();
+        }
 
         async function fetchSettings() {
             try {
@@ -110,12 +218,13 @@
                 banner.style.display = 'none';
             }
 
-            const placeOrderBtn = document.querySelector('button[onclick="placeOrder()"]');
+            const placeOrderBtn = document.getElementById('place-order-btn');
+            if (!placeOrderBtn) return;
             const now = new Date();
             let isBusinessActive = true;
-            let statusMessage = '提交点单';
+            let statusMessage = t('submit_order');
 
-            // Unified Sessions Logic
+            // 1. Sessions Logic
             const sessionsEnabled = appSettings['business_sessions_enabled'];
             const sessionsList = appSettings['business_sessions_list'];
             const sessionsBanner = document.getElementById('sessions-banner');
@@ -145,15 +254,15 @@
 
                     if (!currentSession) {
                         isBusinessActive = false;
-                        statusMessage = '不在营业时段';
+                        statusMessage = t('not_in_business');
                     }
                 } else {
                     sessionsBanner.style.display = 'none';
                     isBusinessActive = false;
-                    statusMessage = '时段未设置';
+                    statusMessage = t('hours_not_set');
                 }
             } else {
-                sessionsBanner.style.display = 'none';
+                if (sessionsBanner) sessionsBanner.style.display = 'none';
             }
 
             // Apply to button
@@ -163,7 +272,7 @@
                 placeOrderBtn.style.background = '#ccc';
             } else {
                 placeOrderBtn.disabled = false;
-                placeOrderBtn.innerText = '提交点单';
+                placeOrderBtn.innerText = t('submit_order');
                 placeOrderBtn.style.background = '#0071e3';
             }
         }
@@ -173,25 +282,27 @@
                 const res = await fetch('/api/menu');
                 if (!res.ok) {
                     const text = await res.text();
-                    let errMsg = '服务器错误';
+                    let errMsg = t('server_error');
                     try {
                         const json = JSON.parse(text);
                         errMsg = json.error || errMsg;
                     } catch(e) {
-                        errMsg = text; // If not JSON, show the raw text
+                        errMsg = text;
                     }
                     throw new Error(errMsg);
                 }
                 menuData = await res.json();
                 renderMenu();
             } catch (err) {
-                document.getElementById('menu').innerHTML = `<p style="color:red">加载失败: ${err.message.substring(0, 100)}</p>`;
+                const menuDiv = document.getElementById('menu');
+                if (menuDiv) menuDiv.innerHTML = `<p style="color:red">${t('server_error')}: ${err.message.substring(0, 100)}</p>`;
                 console.error(err);
             }
         }
 
         function renderMenu() {
             const menuDiv = document.getElementById('menu');
+            if (!menuDiv || menuData.length === 0) return;
             menuDiv.innerHTML = menuData.map(item => {
                 const quantityInCart = cart.filter(c => c.id === item.Id).reduce((sum, cartItem) => sum + cartItem.quantity, 0);
                 const effectiveStock = item.StockQuantity - quantityInCart;
@@ -200,13 +311,13 @@
                     <div class="menu-item">
                         <h3>${item.Name}</h3>
                         <p>${item.Description || ''}</p>
-                        ${item.CustomOptions ? `<p style="font-size: 0.75em; color: #888;">可选: ${item.CustomOptions.replace(/\|/g, ' ')}</p>` : ''}
+                        ${item.CustomOptions ? `<p style="font-size: 0.75em; color: #888;">${item.CustomOptions.replace(/\|/g, ' ')}</p>` : ''}
                         <p class="price">¥${item.Price.toFixed(2)}</p>
                         <p style="font-size: 0.8em; color: ${effectiveStock > 0 ? '#666' : 'red'}">
-                            ${effectiveStock > 0 ? `剩余库存: ${effectiveStock}` : '已售罄'}
+                            ${effectiveStock > 0 ? `${t('stock_left')}: ${effectiveStock}` : t('out_of_stock')}
                         </p>
                         <button onclick="addToCart(${item.Id})" ${effectiveStock > 0 ? '' : 'disabled style="background:#ccc"'}>
-                            ${effectiveStock > 0 ? (item.CustomOptions ? '选规格' : '加入篮子') : '无法购买'}
+                            ${effectiveStock > 0 ? (item.CustomOptions ? t('select_spec') : t('add_to_cart')) : t('unable_to_buy')}
                         </button>
                     </div>
                 `;
@@ -215,11 +326,9 @@
 
         function addToCart(id) {
             const item = menuData.find(m => m.Id === id);
-            
-            // Front-end stock check
             const quantityInCart = cart.filter(c => c.id === id).reduce((s, i) => s + i.quantity, 0);
             if (quantityInCart + 1 > item.StockQuantity) {
-                alert('抱歉，该商品库存不足');
+                alert(t('stock_insufficient'));
                 return;
             }
 
@@ -237,14 +346,14 @@
             const optionsDiv = document.getElementById('modal-options');
             document.getElementById('modal-item-name').innerText = item.Name;
             
-            // Parse options: "分类:选项1,选项2|分类2:..."
             const groups = item.CustomOptions.split('|').map(g => {
-                const [name, choicesStr] = g.split(':');
+                const parts = g.split(':');
+                if (parts.length < 2) return null;
+                const [name, choicesStr] = parts;
                 return { name: name.trim(), choices: choicesStr.split(',').map(c => c.trim()) };
-            });
+            }).filter(g => g !== null);
 
             optionsDiv.innerHTML = groups.map(group => {
-                // Default select first choice
                 selectedOptionsMap[group.name] = group.choices[0];
                 return `
                     <div class="option-group">
@@ -265,7 +374,6 @@
         }
 
         function selectChoice(btn, groupName, choice) {
-            // Unselect others in same group
             const groupDiv = btn.parentElement;
             groupDiv.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
@@ -297,6 +405,13 @@
         function updateCart() {
             const cartDiv = document.getElementById('cart-items');
             const totalSpan = document.getElementById('total-price');
+            if (!cartDiv) return;
+            if (cart.length === 0) {
+                cartDiv.innerHTML = `<p style="color:#999; font-size:14px">${t('empty_cart')}</p>`;
+                totalSpan.innerText = '0.00';
+                return;
+            }
+
             cartDiv.innerHTML = cart.map((item, index) => `
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
                     <div>
@@ -304,9 +419,10 @@
                         ${item.selectedOptions ? `<div style="font-size: 11px; color: #666;">${item.selectedOptions}</div>` : ''}
                         <div style="font-size: 12px; color: #0071e3;">¥${(item.Price * item.quantity).toFixed(2)}</div>
                     </div>
-                    <button onclick="removeFromCart(${index})" style="background: #ff3b30; padding: 4px 8px; font-size: 11px;">移除</button>
+                    <button onclick="removeFromCart(${index})" style="background: #ff3b30; color: white; padding: 4px 8px; font-size: 11px; border-radius: 4px;">${t('remove')}</button>
                 </div>
             `).join('');
+            
             const total = cart.reduce((sum, item) => sum + (item.Price * item.quantity), 0);
             totalSpan.innerText = total.toFixed(2);
         }
@@ -318,42 +434,46 @@
         }
 
         async function placeOrder() {
-            const code = document.getElementById('customer-code').value;
-            if (!code || cart.length === 0) return alert('请输入暗号并选择商品');
-            
-            localStorage.setItem('coffee_order_code', code);
+            if (cart.length === 0) return alert(t('empty_cart'));
             
             const total = cart.reduce((sum, item) => sum + (item.Price * item.quantity), 0);
-            const res = await fetch('/api/orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code, items: cart, totalPrice: total })
-            });
-            
-            if (res.ok) {
-                alert('点单成功！你的暗号是：' + code);
-                document.getElementById('search-code').value = code;
-                cart = [];
-                updateCart();
-                fetchMyOrdersByCode();
-                fetchMenu(); // Refresh menu to update stock display
+            try {
+                const res = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: cart, totalPrice: total })
+                });
 
-                const redirect = appSettings['redirect_url'];
-                if (redirect && redirect.enabled && redirect.value) {
-                    setTimeout(() => {
-                        window.location.href = redirect.value;
-                    }, 1500);
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`${t('order_success')} ${data.orderNumber}`);
+                    
+                    document.getElementById('search-code').value = data.orderNumber;
+                    localStorage.setItem('coffee_order_number', data.orderNumber);
+                    
+                    cart = [];
+                    updateCart();
+                    fetchMyOrdersByCode();
+                    fetchMenu();
+
+                    if (appSettings['redirect_url'] && appSettings['redirect_url'].enabled && appSettings['redirect_url'].value) {
+                        setTimeout(() => {
+                            window.location.href = appSettings['redirect_url'].value;
+                        }, 1500);
+                    }
+                } else {
+                    const errorMsg = await res.text();
+                    alert(`${t('order_failed')}: ${errorMsg}`);
                 }
-            } else {
-                const errorMsg = await res.text();
-                alert('下单失败: ' + errorMsg);
+            } catch (err) {
+                alert(`${t('order_failed')}: ${err.message}`);
             }
         }
 
         async function fetchMyOrdersByCode() {
-            const code = document.getElementById('search-code').value;
+            const code = document.getElementById('search-code').value.trim();
             if (!code) return;
-            localStorage.setItem('coffee_order_code', code);
+            localStorage.setItem('coffee_order_number', code);
             
             const listDiv = document.getElementById('my-orders-list');
             try {
@@ -361,44 +481,54 @@
                 const orders = await res.json();
                 
                 if (orders.length === 0) {
-                    listDiv.innerHTML = '未找到该暗号对应的订单。';
+                    listDiv.innerHTML = `<p style="color:#999">${t('no_records')}</p>`;
                     return;
                 }
 
                 listDiv.innerHTML = orders.map(o => `
-                    <div style="padding: 10px; border-bottom: 1px solid #ccc; background: white; margin-bottom: 5px; border-radius: 4px;">
-                        <strong>单号 #${o.Id}</strong> [${o.Status === 'Pending' ? '排队中' : o.Status}]<br>
-                        内容: ${o.ItemSummary}<br>
-                        金额: ¥${o.TotalPrice.toFixed(2)}<br>
-                        ${o.Status === 'Pending' ? `<button style="background: #ff3b30; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 5px; cursor: pointer;" onclick="userCancelOrder(${o.Id})">我要撤单</button>` : ''}
+                    <div style="padding: 10px; border-bottom: 1px solid #ccc; background: white; margin-bottom: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-size: 13px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px">
+                            <span style="font-weight:bold">#${o.Id} - ${o.Status === 'Pending' ? t('status_pending') : (o.Status === 'Completed' ? t('status_completed') : t('status_cancelled'))}</span>
+                            <span style="color:#666">${new Date(o.OrderDate).toLocaleString()}</span>
+                        </div>
+                        <div style="color:#444; margin-bottom:5px">${t('items')}: ${o.ItemSummary}</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center">
+                            <span style="color:#0071e3; font-weight:bold">¥${o.TotalPrice.toFixed(2)}</span>
+                            ${o.Status === 'Pending' ? `<button onclick="userCancelOrder(${o.Id})" style="background:#ff3b30; color:white; padding:4px 8px; font-size:11px; border:none; border-radius:4px; cursor:pointer;">${t('cancel')}</button>` : ''}
+                        </div>
                     </div>
                 `).join('');
-            } catch (e) {
-                listDiv.innerHTML = '查询出错。';
+            } catch (err) {
+                listDiv.innerHTML = `<p style="color:red">${t('server_error')}</p>`;
             }
         }
 
         async function userCancelOrder(id) {
-            if (!confirm('确定撤回这张点单吗？')) return;
-            const res = await fetch(`/api/orders/${id}/cancel`, { method: 'POST' });
-            if (res.ok) {
-                alert('点单已撤回');
-                fetchMyOrdersByCode();
-            } else {
-                alert(await res.text());
+            if (!confirm(t('cancel_confirm'))) return;
+            try {
+                const res = await fetch(`/api/orders/${id}/cancel`, { method: 'POST' });
+                if (res.ok) {
+                    alert(t('cancel_success'));
+                    fetchMyOrdersByCode();
+                } else {
+                    alert(await res.text());
+                }
+            } catch (err) {
+                alert(t('server_error'));
             }
         }
 
         // Initialize
-        const savedCode = localStorage.getItem('coffee_order_code');
-        if (savedCode) {
-            document.getElementById('customer-code').value = savedCode;
-            document.getElementById('search-code').value = savedCode;
+        const savedNumber = localStorage.getItem('coffee_order_number');
+        if (savedNumber) {
+            document.getElementById('search-code').value = savedNumber;
             fetchMyOrdersByCode();
         }
         
+        updateUI();
         fetchMenu();
         fetchSettings();
+        setInterval(fetchMenu, 30000);
     </script>
     <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
         <a href="https://github.com/Pacoshao" target="_blank" style="text-decoration: none; color: #666; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; transition: all 0.3s;">

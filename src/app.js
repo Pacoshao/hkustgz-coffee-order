@@ -101,16 +101,6 @@ async function initializeDatabase() {
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'refresh_interval')
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_hours_start')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_hours_start', '08:00', 1);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_hours_end')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_hours_end', '20:00', 1);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_hours_enabled')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_hours_enabled', '1', 0);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_dates_enabled')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_dates_enabled', '1', 0);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_dates_list')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_dates_list', '', 1);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_sessions_enabled')
                 INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_sessions_enabled', '1', 0);
             IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_sessions_list')
@@ -158,29 +148,37 @@ app.post('/api/orders', async (req, res) => {
         const pool = await getPool();
 
         // Check Business Status
-        const settingsResult = await pool.request().query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey = 'business_sessions_list' OR SettingKey = 'business_sessions_enabled'");
+        const settingsResult = await pool.request().query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey LIKE 'business_%'");
         const settings = {};
         settingsResult.recordset.forEach(s => settings[s.SettingKey] = s);
 
         const now = new Date();
+        // Convert to China Time (UTC+8) for simple business hours check
+        const chinaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (8 * 3600000));
+        const currentTImeStr = chinaTime.getHours().toString().padStart(2, '0') + ':' + chinaTime.getMinutes().toString().padStart(2, '0');
 
-        // Check Unified Business Sessions
+        let isClosed = false;
+        let reason = "当前不在营业时段内。";
+
+        // Check Unified Business Sessions (Specific Date/Time ranges)
         if (settings['business_sessions_enabled']?.IsEnabled) {
             let sessions = [];
             try {
                 sessions = JSON.parse(settings['business_sessions_list']?.SettingValue || '[]');
             } catch(e) { sessions = []; }
 
-            const isOpen = sessions.some(s => {
+            const isOpenSession = sessions.some(s => {
                 if (!s.start || !s.end) return false;
                 const start = new Date(s.start);
                 const end = new Date(s.end);
                 return now >= start && now <= end;
             });
 
-            if (!isOpen) {
-                return res.status(403).send("当前不在营业时段内。");
-            }
+            if (!isOpenSession) isClosed = true;
+        }
+
+        if (isClosed) {
+            return res.status(403).send(reason);
         }
 
         const transaction = new sql.Transaction(pool);
@@ -189,7 +187,7 @@ app.post('/api/orders', async (req, res) => {
         try {
             const request = new sql.Request(transaction);
 
-            // 1. Pre-check all items stock (Quick look before starting DB inserts)
+            // 1. Pre-check all items stock
             for (const item of items) {
                 const stockCheckResult = await request
                     .input(`item_id_chk_${item.id}`, sql.Int, item.id)
@@ -201,15 +199,25 @@ app.post('/api/orders', async (req, res) => {
                 }
             }
 
-            // 2. Create the Order
+            // 2. Generate Automatic Order Number (C001 format)
+            const todayStart = new Date(now);
+            todayStart.setHours(0,0,0,0);
+            // Use China Time for date boundary if possible, but keeping it simple with server local date is usually fine for daily reset
+            const countResult = await request
+                .input('todayStart', sql.DateTime, todayStart)
+                .query("SELECT COUNT(*) as count FROM Orders WHERE OrderDate >= @todayStart AND CustomerName LIKE 'C%'");
+            const orderCount = countResult.recordset[0].count + 1;
+            const orderNumber = `C${orderCount.toString().padStart(3, '0')}`;
+
+            // 3. Create the Order
             const orderResult = await request
-                .input('code', sql.NVarChar, code)
+                .input('code', sql.NVarChar, orderNumber)
                 .input('totalPrice', sql.Decimal(10, 2), totalPrice)
                 .query('INSERT INTO Orders (CustomerName, TotalPrice, Status) OUTPUT INSERTED.Id VALUES (@code, @totalPrice, \'Pending\')');
 
             const orderId = orderResult.recordset[0].Id;
 
-            // 3. Process each item: Insert and Deduct Stock Atomically
+            // 4. Process each item: Insert and Deduct Stock Atomically
             for (const item of items) {
                 const itemRequest = new sql.Request(transaction);
                 
@@ -220,7 +228,6 @@ app.post('/api/orders', async (req, res) => {
                     .query('UPDATE MenuItems SET StockQuantity = StockQuantity - @dec_qty WHERE Id = @dec_id AND StockQuantity >= @dec_qty');
                 
                 if (updateStockResult.rowsAffected[0] === 0) {
-                    // This happens if someone else took the stock between step 1 and here
                     throw new Error(`下单失败: 商品库存已被抢光或不存在`);
                 }
 
@@ -235,7 +242,7 @@ app.post('/api/orders', async (req, res) => {
             }
 
             await transaction.commit();
-            res.status(201).json({ orderId });
+            res.status(201).json({ orderId, orderNumber });
         } catch (err) {
             await transaction.rollback();
             throw err;

@@ -6,6 +6,7 @@
     <title>HKUST(GZ) 咖啡系统 - 后台管理</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; max-width: 1200px; margin: 0 auto; background: #f0f2f5; color: #333; line-height: 1.6; }
+        .lang-toggle { position: absolute; top: 15px; right: 15px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
         h1 { font-size: 1.8em; margin-bottom: 20px; }
         h2 { font-size: 1.4em; margin-bottom: 15px; }
@@ -80,26 +81,29 @@
     </style>
 </head>
 <body>
+    <div class="lang-toggle">
+        <button onclick="toggleLang()" id="lang-btn" style="background:#8e8e93; font-size: 12px; padding: 5px 10px; color: white; border: none; border-radius: 4px; cursor: pointer;">English</button>
+    </div>
     <div id="login-overlay">
         <div class="card" style="text-align: center; width: 85%; max-width: 350px;">
-            <h2>管理员登录</h2>
+            <h2 data-i18n="admin_login">管理员登录</h2>
             <div class="form-group">
-                <input type="password" id="admin-pw-input" placeholder="输入后台密码" style="padding:12px; width:100%; box-sizing: border-box; font-size: 16px;">
+                <input type="password" id="admin-pw-input" placeholder="输入后台密码" data-i18n-placeholder="pw_placeholder" style="padding:12px; width:100%; box-sizing: border-box; font-size: 16px;">
             </div>
-            <button class="primary" onclick="login()" style="width: 100%; padding: 12px;">进入</button>
+            <button class="primary" onclick="login()" style="width: 100%; padding: 12px;" data-i18n="login_btn">进入</button>
         </div>
     </div>
 
     <!-- 自定义选项编辑器 -->
     <div id="options-editor" class="edit-options-modal">
         <div class="options-box">
-            <h3 style="margin-top:0">配置自定义选项</h3>
-            <p style="font-size: 12px; color: #666; margin-bottom: 15px;">例如：分类为“甜度”，选项为“多糖,少糖,无糖”</p>
+            <h3 style="margin-top:0" data-i18n="options_editor_title">配置自定义选项</h3>
+            <p style="font-size: 12px; color: #666; margin-bottom: 15px;" data-i18n="options_editor_hint">例如：分类为“甜度”，选项为“多糖,少糖,无糖”</p>
             <div id="options-rows-container"></div>
-            <button onclick="addOptionRow()" style="width: 100%; margin-bottom: 15px; background: #f0f2f5;">+ 添加分组 (如甜度、冰量)</button>
+            <button onclick="addOptionRow()" style="width: 100%; margin-bottom: 15px; background: #f0f2f5;" data-i18n="add_option_group">+ 添加分组 (如甜度、冰量)</button>
             <div style="display: flex; gap: 10px;">
-                <button class="primary" style="flex: 1" onclick="saveOptionsFromEditor()">确认并关闭</button>
-                <button style="flex: 1" onclick="closeOptionsEditor()">取消</button>
+                <button class="primary" style="flex: 1" onclick="saveOptionsFromEditor()" data-i18n="confirm_close">确认并关闭</button>
+                <button style="flex: 1" onclick="closeOptionsEditor()" data-i18n="cancel_btn">取消</button>
             </div>
         </div>
     </div>
@@ -107,27 +111,27 @@
     <h1>☕ HKUST(GZ) 咖啡后台</h1>
     
     <div class="tabs">
-        <button id="tab-orders" class="tab-btn active" onclick="showTab('orders')">点单处理</button>
-        <button id="tab-menu" class="tab-btn" onclick="showTab('menu')">菜单管理</button>
-        <button id="tab-settings" class="tab-btn" onclick="showTab('settings')">系统设置</button>
+        <button id="tab-orders" class="tab-btn active" onclick="showTab('orders')" data-i18n="tab_orders">点单处理</button>
+        <button id="tab-menu" class="tab-btn" onclick="showTab('menu')" data-i18n="tab_menu">菜单管理</button>
+        <button id="tab-settings" class="tab-btn" onclick="showTab('settings')" data-i18n="tab_settings">系统设置</button>
     </div>
 
     <!-- 点单管理 -->
     <div id="section-orders" class="card">
         <div class="header-actions">
-            <h2>📋 点单记录</h2>
+            <h2 data-i18n="orders_title">📋 点单记录</h2>
             <div class="action-btns">
                 <span id="last-refresh-time" style="font-size: 12px; color: #999; align-self: center;"></span>
-                <button class="primary" onclick="fetchOrders()">立即刷新</button>
-                <button class="primary" onclick="exportOrders()">导出 CSV</button>
-                <button class="danger" onclick="clearAllOrders()">清空所有记录</button>
+                <button class="primary" onclick="fetchOrders()" data-i18n="refresh">立即刷新</button>
+                <button class="primary" onclick="exportOrders()" data-i18n="export">导出 CSV</button>
+                <button class="danger" onclick="clearAllOrders()" data-i18n="clear_all">清空所有记录</button>
             </div>
         </div>
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th><th>点单暗号</th><th>内容</th><th>金额</th><th>状态</th><th>操作</th>
+                        <th>ID</th><th data-i18n="order_num">点单号</th><th data-i18n="content">内容</th><th data-i18n="amount">金额</th><th data-i18n="status">状态</th><th data-i18n="actions">操作</th>
                     </tr>
                 </thead>
                 <tbody id="orders-list"></tbody>
@@ -137,15 +141,15 @@
 
     <!-- 菜单管理 -->
     <div id="section-menu" class="card" style="display:none">
-        <h2>🍔 菜单管理</h2>
+        <h2 data-i18n="menu_title">🍴 菜单管理</h2>
         <div class="card" style="background: #f9f9f9; padding: 15px;">
             <h3 style="margin-top:0">添加新品</h3>
             <div class="form-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="text" id="m-name" placeholder="名称" style="flex: 1; min-width: 120px;">
-                <input type="number" id="m-price" placeholder="价格" style="flex: 0.5; min-width: 80px;">
-                <input type="number" id="m-stock" placeholder="库存数量" style="flex: 0.5; min-width: 80px;">
-                <input type="text" id="m-desc" placeholder="描述" style="flex: 2; min-width: 120px;">
-                <input type="text" id="m-options" placeholder="自定义选项" style="flex: 2; min-width: 150px;" readonly onclick="openOptionsEditor('m-options')">
+                <input type="text" id="m-name" placeholder="名称" data-i18n-placeholder="placeholder_name" style="flex: 1; min-width: 100px;">
+                <input type="number" id="m-price" placeholder="价格" data-i18n-placeholder="placeholder_price" style="flex: 0.5; min-width: 80px;">
+                <input type="number" id="m-stock" placeholder="库存数量" data-i18n-placeholder="placeholder_stock" style="flex: 0.5; min-width: 80px;">
+                <input type="text" id="m-desc" placeholder="描述" data-i18n-placeholder="placeholder_desc" style="flex: 2; min-width: 120px;">
+                <input type="text" id="m-options" placeholder="自定义选项" data-i18n-placeholder="placeholder_options" style="flex: 2; min-width: 150px;" readonly onclick="openOptionsEditor('m-options')">
                 <button class="primary" onclick="addMenuItem()" style="flex: 1; min-width: 100px;">添加商品</button>
             </div>
         </div>
@@ -153,7 +157,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>名称</th><th>价格</th><th>描述</th><th>库存/选项</th><th>状态</th><th>操作</th>
+                        <th data-i18n="name">名称</th><th data-i18n="price">价格</th><th data-i18n="description">描述</th><th data-i18n="stock_options">库存/选项</th><th data-i18n="status">状态</th><th data-i18n="action">操作</th>
                     </tr>
                 </thead>
                 <tbody id="menu-list"></tbody>
@@ -163,48 +167,195 @@
 
     <!-- 系统设置 -->
     <div id="section-settings" class="card" style="display:none">
-        <h2>⚙️ 系统设置</h2>
+        <h2 data-i18n="settings_title">⚙️ 系统设置</h2>
         <div class="card">
-            <h3>额外提示内容</h3>
+            <h3 data-i18n="tips_title">额外提示内容</h3>
             <div class="form-group">
-                <label><input type="checkbox" id="tip-enabled"> 启用提示</label>
-                <textarea id="tip-text" style="width: 100%; height: 80px; margin-top: 10px; display: block; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="显示在首页顶部的提示内容..."></textarea>
+                <label><input type="checkbox" id="tip-enabled"> <span data-i18n="enable_tips">启用提示</span></label>
+                <textarea id="tip-text" style="width: 100%; height: 80px; margin-top: 10px; display: block; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="显示在首页顶部的提示内容..." data-i18n-placeholder="placeholder_tip"></textarea>
             </div>
         </div>
         <div class="card" style="margin-top: 20px;">
-            <h3>下单后跳转</h3>
+            <h3 data-i18n="redirect_title">下单后跳转</h3>
             <div class="form-group">
-                <label><input type="checkbox" id="redirect-enabled"> 启用跳转</label>
-                <input type="text" id="redirect-url" style="margin-top: 10px; display: block; width: 95%; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="例如: https://forms.office.com/...">
+                <label><input type="checkbox" id="redirect-enabled"> <span data-i18n="enable_redirect">启用跳转</span></label>
+                <input type="text" id="redirect-url" style="margin-top: 10px; display: block; width: 95%; border: 1px solid #ddd; border-radius: 4px; padding: 10px;" placeholder="例如: https://forms.office.com/..." data-i18n-placeholder="placeholder_redirect">
             </div>
         </div>
         <div class="card" style="margin-top: 20px;">
-            <h3>自动刷新设置</h3>
+            <h3 data-i18n="refresh_title">自动刷新设置</h3>
             <div class="form-group">
-                <label>后台记录自动刷新间隔 (秒)</label>
+                <label data-i18n="refresh_label">后台记录自动刷新间隔 (秒)</label>
                 <input type="number" id="refresh-interval" style="width: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 10px;" min="5" value="30">
-                <p style="font-size: 12px; color: #999; margin-top: 5px;">建议 10s 以上以平衡实时性与负载。</p>
+                <p style="font-size: 12px; color: #999; margin-top: 5px;" data-i18n="refresh_hint">建议 10s 以上以平衡实时性与负载。</p>
             </div>
         </div>
 
         <div class="card" style="margin-top: 20px; border: 2px solid #0071e3; background: #f8fbff;">
-            <h3>⏰ 营业时段设置</h3>
+            <h3 data-i18n="business_title">⏰ 营业时段设置</h3>
             <div class="form-group">
-                <label style="color: #0071e3; font-weight: bold;"><input type="checkbox" id="sessions-enabled"> 启用营业时段限制</label>
-                <p style="font-size: 12px; color: #666; margin-top: 5px;">如果不启用，系统将全天 24 小时开放下单。</p>
+                <label style="color: #0071e3; font-weight: bold;"><input type="checkbox" id="sessions-enabled"> <span data-i18n="enable_sessions">启用营业时段限制</span></label>
+                <p style="font-size: 12px; color: #666; margin-top: 5px;" data-i18n="business_hint">如果不启用，系统将全天 24 小时开放下单。</p>
             </div>
             <div id="sessions-container"></div>
-            <button onclick="addSessionRow()" style="margin-top: 10px; width: 100%; padding: 10px; background: #fff; border: 1px dashed #0071e3; color: #0071e3; border-radius: 8px; cursor: pointer; font-weight: bold;">+ 添加新营业时段</button>
-            <p style="font-size: 12px; color: #666; margin-top: 10px;">选择起始日期时间与结束日期时间。例如：2026/02/06 08:30 至 17:30</p>
+            <button onclick="addSessionRow()" style="margin-top: 10px; width: 100%; padding: 10px; background: #fff; border: 1px dashed #0071e3; color: #0071e3; border-radius: 8px; cursor: pointer; font-weight: bold;" data-i18n="add_session">+ 添加新营业时段</button>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;" data-i18n="session_hint">选择起始日期时间与结束日期时间。例如：2026/02/06 08:30 至 17:30</p>
         </div>
 
-        <button class="primary" style="margin-top: 20px; width: 100%; padding: 12px;" onclick="saveSettings()">保存所有设置</button>
+        <button class="primary" style="margin-top: 20px; width: 100%; padding: 12px;" onclick="saveSettings()" data-i18n="save_settings">保存所有设置</button>
     </div>
 
     <script>
+        const i18n = {
+            'zh-CN': {
+                admin_login: '管理员登录',
+                pw_placeholder: '输入后台密码',
+                login_btn: '进入',
+                tab_orders: '点单处理',
+                tab_menu: '菜单管理',
+                tab_settings: '系统设置',
+                orders_title: '📋 点单记录',
+                refresh: '立即刷新',
+                export: '导出 CSV',
+                clear_all: '清空所有记录',
+                order_num: '点单号',
+                content: '内容',
+                amount: '金额',
+                status: '状态',
+                actions: '操作',
+                complete: '完成',
+                cancel: '取消',
+                last_refresh: '上次刷新',
+                save_settings: '保存所有设置',
+                settings_saved: '设置已保存',
+                pending: '制作中',
+                completed: '已完成',
+                cancelled: '已取消',
+                menu_title: '🍴 菜单管理',
+                add_item: '添加商品',
+                name: '名称',
+                price: '价格',
+                description: '描述',
+                stock_options: '库存/选项',
+                action: '操作',
+                settings_title: '⚙️ 系统设置',
+                tips_title: '额外提示内容',
+                enable_tips: '启用提示',
+                redirect_title: '下单后跳转',
+                enable_redirect: '启用跳转',
+                refresh_title: '自动刷新设置',
+                refresh_label: '后台记录自动刷新间隔 (秒)',
+                business_title: '⏰ 营业时段设置',
+                enable_sessions: '启用营业时段限制',
+                add_session: '+ 添加新营业时段',
+                to: '至',
+                options_editor_title: '配置自定义选项',
+                options_editor_hint: '例如：分类为“甜度”，选项为“多糖,少糖,无糖”',
+                add_option_group: '+ 添加分组 (如甜度、冰量)',
+                confirm_close: '确认并关闭',
+                cancel_btn: '取消',
+                placeholder_name: '名称',
+                placeholder_price: '价格',
+                placeholder_stock: '库存数量',
+                placeholder_desc: '描述',
+                placeholder_options: '自定义选项',
+                placeholder_tip: '显示在首页顶部的提示内容...',
+                placeholder_redirect: '例如: https://forms.office.com/...',
+                business_hint: '如果不启用，系统将全天 24 小时开放下单。',
+                session_hint: '选择起始日期时间与结束日期时间。例如：2026/02/06 08:30 至 17:30',
+                refresh_hint: '建议 10s 以上以平衡实时性与负载。'
+            },
+            'en': {
+                admin_login: 'Admin Login',
+                pw_placeholder: 'Enter password',
+                login_btn: 'Login',
+                tab_orders: 'Orders',
+                tab_menu: 'Menu',
+                tab_settings: 'Settings',
+                orders_title: '📋 Order Records',
+                refresh: 'Refresh',
+                export: 'Export CSV',
+                clear_all: 'Clear All',
+                order_num: 'Order #',
+                content: 'Content',
+                amount: 'Amount',
+                status: 'Status',
+                actions: 'Actions',
+                complete: 'Finish',
+                cancel: 'Cancel',
+                last_refresh: 'Last refresh',
+                save_settings: 'Save All Settings',
+                settings_saved: 'Settings saved',
+                pending: 'Pending',
+                completed: 'Completed',
+                cancelled: 'Cancelled',
+                menu_title: '🍴 Menu Management',
+                add_item: 'Add Item',
+                name: 'Name',
+                price: 'Price',
+                description: 'Description',
+                stock_options: 'Stock/Options',
+                action: 'Action',
+                settings_title: '⚙️ System Settings',
+                tips_title: 'Extra Tips Content',
+                enable_tips: 'Enable Tips',
+                redirect_title: 'Redirect after Order',
+                enable_redirect: 'Enable Redirect',
+                refresh_title: 'Auto Refresh Setup',
+                refresh_label: 'Admin Refresh Interval (sec)',
+                business_title: '⏰ Business Sessions',
+                enable_sessions: 'Enable Session Limits',
+                add_session: '+ Add New Session',
+                to: 'to',
+                options_editor_title: 'Configure Custom Options',
+                options_editor_hint: 'Example: Category "Sweetness", Options "Full, Less, None"',
+                add_option_group: '+ Add Group (e.g., Sweetness, Ice)',
+                confirm_close: 'Confirm & Close',
+                cancel_btn: 'Cancel',
+                placeholder_name: 'Name',
+                placeholder_price: 'Price',
+                placeholder_stock: 'Stock Quantity',
+                placeholder_desc: 'Description',
+                placeholder_options: 'Custom Options',
+                placeholder_tip: 'Tips displayed at the top of the homepage...',
+                placeholder_redirect: 'e.g., https://forms.office.com/...',
+                business_hint: 'If disabled, the system will be open 24/7.',
+                session_hint: 'Select start/end date & time. Example: 2026/02/06 08:30 to 17:30',
+                refresh_hint: 'Suggest 10s+ to balance responsiveness and load.'
+            }
+        };
+
+        let currentLang = localStorage.getItem('lang') || 'zh-CN';
         let adminPassword = '';
         let refreshTimer = null;
         let currentEditingOptionsInputId = '';
+
+        function toggleLang() {
+            currentLang = currentLang === 'zh-CN' ? 'en' : 'zh-CN';
+            localStorage.setItem('lang', currentLang);
+            updateUI();
+        }
+
+        function t(key) {
+            return i18n[currentLang][key] || key;
+        }
+
+        function updateUI() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                el.innerText = t(key);
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                el.placeholder = t(key);
+            });
+            const langBtn = document.getElementById('lang-btn');
+            if (langBtn) langBtn.innerText = currentLang === 'zh-CN' ? 'English' : '中文';
+            if (adminPassword) {
+                fetchOrders();
+                fetchMenu();
+            }
+        }
 
         function login() {
             adminPassword = document.getElementById('admin-pw-input').value;
@@ -323,7 +474,7 @@
             row.innerHTML = `
                 <div class="session-inputs">
                     <input type="datetime-local" class="session-start" value="${start}">
-                    <span class="to-text">至</span>
+                    <span class="to-text" data-i18n="to">${t('to')}</span>
                     <input type="datetime-local" class="session-end" value="${end}">
                 </div>
                 <button class="danger remove-session-btn" onclick="this.parentElement.remove()">×</button>
@@ -395,14 +546,14 @@
                 document.getElementById('orders-list').innerHTML = data.map(o => `
                     <tr>
                         <td>${o.Id}</td><td>${o.CustomerName}</td><td>${o.ItemSummary}</td><td>¥${o.TotalPrice.toFixed(2)}</td>
-                        <td class="status-${o.Status}">${o.Status}</td>
+                        <td class="status-${o.Status}">${o.Status === 'Pending' ? t('pending') : (o.Status === 'Completed' ? t('completed') : t('cancelled'))}</td>
                         <td>
-                            ${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">完成</button>` : ''}
-                            ${o.Status === 'Pending' ? `<button class="danger" onclick="cancelOrder(${o.Id})">取消</button>` : ''}
+                            ${o.Status === 'Pending' ? `<button onclick="completeOrder(${o.Id})">${t('complete')}</button>` : ''}
+                            ${o.Status === 'Pending' ? `<button class="danger" onclick="cancelOrder(${o.Id})">${t('cancel')}</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
-                document.getElementById('last-refresh-time').innerText = '上次刷新: ' + new Date().toLocaleTimeString();
+                document.getElementById('last-refresh-time').innerText = t('last_refresh') + ': ' + new Date().toLocaleTimeString();
             } catch (e) {
                 console.error('Fetch orders error:', e);
             }
@@ -537,6 +688,9 @@
             fetchMenu();
             fetchSettings();
         }
+
+        // Init
+        updateUI();
     </script>
     <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
         <a href="https://github.com/Pacoshao" target="_blank" style="text-decoration: none; color: #666; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; transition: all 0.3s;">
