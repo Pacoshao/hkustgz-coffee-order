@@ -2,6 +2,12 @@
   publish = "public"
   functions = "netlify/functions"
 
+[build.processing]
+  skip_processing = false
+
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "ADMIN_PASSWORD"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api"
