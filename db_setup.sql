@@ -1,5 +1,5 @@
 -- Create MenuItems table
-CREATE TABLE IF NOT EXISTS MenuItems (
+CREATE TABLE MenuItems (
     Id INT PRIMARY KEY AUTO_INCREMENT,
     Name VARCHAR(100) NOT NULL,
     Price DECIMAL(10, 2) NOT NULL,
@@ -7,24 +7,26 @@ CREATE TABLE IF NOT EXISTS MenuItems (
     Category VARCHAR(50),
     IsAvailable BOOLEAN DEFAULT 1,
     StockQuantity INT DEFAULT 0,
-    CustomOptions TEXT,
-    INDEX idx_category (Category),
-    INDEX idx_available (IsAvailable)
+    CustomOptions TEXT
 );
 
+CREATE INDEX idx_category ON MenuItems (Category);
+CREATE INDEX idx_available ON MenuItems (IsAvailable);
+
 -- Create Orders table
-CREATE TABLE IF NOT EXISTS Orders (
+CREATE TABLE Orders (
     Id INT PRIMARY KEY AUTO_INCREMENT,
     OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
     Status VARCHAR(20) DEFAULT 'Pending', -- Pending, Completed, Cancelled
     TotalPrice DECIMAL(10, 2) NOT NULL,
-    CustomerName VARCHAR(100),
-    INDEX idx_order_date (OrderDate),
-    INDEX idx_status (Status)
+    CustomerName VARCHAR(100)
 );
 
+CREATE INDEX idx_order_date ON Orders (OrderDate);
+CREATE INDEX idx_status ON Orders (Status);
+
 -- Create OrderItems table
-CREATE TABLE IF NOT EXISTS OrderItems (
+CREATE TABLE OrderItems (
     Id INT PRIMARY KEY AUTO_INCREMENT,
     OrderId INT,
     MenuItemId INT,
@@ -36,14 +38,14 @@ CREATE TABLE IF NOT EXISTS OrderItems (
 );
 
 -- Create SystemSettings table
-CREATE TABLE IF NOT EXISTS SystemSettings (
+CREATE TABLE SystemSettings (
     SettingKey VARCHAR(50) PRIMARY KEY,
     SettingValue TEXT,
     IsEnabled BOOLEAN DEFAULT 1
 );
 
 -- Seed some initial menu items
-INSERT IGNORE INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
+INSERT INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
 ('Latté', 28.00, 'Coffee', 'Classic espresso with steamed milk', 50),
 ('Americano', 22.00, 'Coffee', 'Espresso with hot water', 50),
 ('Cappuccino', 28.00, 'Coffee', 'Espresso with steamed milk foam', 50),
@@ -51,7 +53,7 @@ INSERT IGNORE INTO MenuItems (Name, Price, Category, Description, StockQuantity)
 ('Flat White', 30.00, 'Coffee', 'Double espresso with silky microfoam milk', 50);
 
 -- Seed system settings
-INSERT IGNORE INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES 
+INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES 
 ('extra_tip', '', 0),
 ('redirect_url', '', 0),
 ('refresh_interval', '30', 1),
