@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { sql, getPool } = require('./db');
+const { getPool } = require('./db');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -19,98 +19,70 @@ async function initializeDatabase() {
         console.log('Checking and initializing database schema...');
 
         // Step 1: Initialize all tables
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'MenuItems')
-            BEGIN
-                CREATE TABLE MenuItems (
-                    Id INT PRIMARY KEY IDENTITY(1,1),
-                    Name NVARCHAR(100) NOT NULL,
-                    Price DECIMAL(10, 2) NOT NULL,
-                    Description NVARCHAR(255),
-                    Category NVARCHAR(50),
-                    IsAvailable BIT DEFAULT 1,
-                    StockQuantity INT DEFAULT 0,
-                    CustomOptions NVARCHAR(MAX)
-                );
-            END
-
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Orders')
-            BEGIN
-                CREATE TABLE Orders (
-                    Id INT PRIMARY KEY IDENTITY(1,1),
-                    OrderDate DATETIME DEFAULT GETDATE(),
-                    Status NVARCHAR(20) DEFAULT 'Pending',
-                    TotalPrice DECIMAL(10, 2) NOT NULL,
-                    CustomerName NVARCHAR(100)
-                );
-            END
-
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OrderItems')
-            BEGIN
-                CREATE TABLE OrderItems (
-                    Id INT PRIMARY KEY IDENTITY(1,1),
-                    OrderId INT FOREIGN KEY REFERENCES Orders(Id),
-                    MenuItemId INT FOREIGN KEY REFERENCES MenuItems(Id),
-                    Quantity INT NOT NULL,
-                    Price DECIMAL(10, 2) NOT NULL,
-                    SelectedOptions NVARCHAR(MAX)
-                );
-            END
-
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SystemSettings')
-            BEGIN
-                CREATE TABLE SystemSettings (
-                    SettingKey NVARCHAR(50) PRIMARY KEY,
-                    SettingValue NVARCHAR(MAX),
-                    IsEnabled BIT DEFAULT 1
-                );
-            END
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS MenuItems (
+                Id INT PRIMARY KEY AUTO_INCREMENT,
+                Name VARCHAR(100) NOT NULL,
+                Price DECIMAL(10, 2) NOT NULL,
+                Description VARCHAR(255),
+                Category VARCHAR(50),
+                IsAvailable BOOLEAN DEFAULT 1,
+                StockQuantity INT DEFAULT 0,
+                CustomOptions TEXT
+            )
         `);
 
-        // Step 2: Migrations (Ensure columns exist in existing tables)
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'StockQuantity')
-            BEGIN
-                ALTER TABLE MenuItems ADD StockQuantity INT DEFAULT 0;
-            END
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MenuItems') AND name = 'CustomOptions')
-            BEGIN
-                ALTER TABLE MenuItems ADD CustomOptions NVARCHAR(MAX);
-            END
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('OrderItems') AND name = 'SelectedOptions')
-            BEGIN
-                ALTER TABLE OrderItems ADD SelectedOptions NVARCHAR(MAX);
-            END
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS Orders (
+                Id INT PRIMARY KEY AUTO_INCREMENT,
+                OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                Status VARCHAR(20) DEFAULT 'Pending',
+                TotalPrice DECIMAL(10, 2) NOT NULL,
+                CustomerName VARCHAR(100)
+            )
         `);
 
-        // Step 3: Seed initial data
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT 1 FROM MenuItems)
-            BEGIN
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS OrderItems (
+                Id INT PRIMARY KEY AUTO_INCREMENT,
+                OrderId INT,
+                MenuItemId INT,
+                Quantity INT NOT NULL,
+                Price DECIMAL(10, 2) NOT NULL,
+                SelectedOptions TEXT,
+                CONSTRAINT FK_OrderItems_Orders FOREIGN KEY (OrderId) REFERENCES Orders(Id),
+                CONSTRAINT FK_OrderItems_MenuItems FOREIGN KEY (MenuItemId) REFERENCES MenuItems(Id)
+            )
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS SystemSettings (
+                SettingKey VARCHAR(50) PRIMARY KEY,
+                SettingValue TEXT,
+                IsEnabled BOOLEAN DEFAULT 1
+            )
+        `);
+
+        // Step 2-3: Migrations and Seed initial data
+        const [rows] = await pool.query('SELECT COUNT(*) as count FROM MenuItems');
+        if (rows[0].count === 0) {
+            await pool.query(`
                 INSERT INTO MenuItems (Name, Price, Category, Description, StockQuantity) VALUES 
-                (N'Latté', 28.00, N'Coffee', N'Classic espresso with steamed milk', 50),
-                (N'Americano', 22.00, N'Coffee', N'Espresso with hot water', 50),
-                (N'Cappuccino', 28.00, N'Coffee', N'Espresso with steamed milk foam', 50),
-                (N'Mocha', 32.00, N'Coffee', N'Espresso with chocolate and milk', 50),
-                (N'Flat White', 30.00, N'Coffee', N'Double espresso with silky microfoam milk', 50);
-            END
-            
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'extra_tip')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('extra_tip', '', 0);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'redirect_url')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'refresh_interval')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_sessions_enabled')
-                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_sessions_enabled', '1', 0);
-            IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'business_sessions_list')
-                INSERT INTO SystemSettings (SettingKey, SystemValue, IsEnabled) VALUES ('business_sessions_list', '[]', 1);
-            
-            -- Set defaults for null stock quantities
-            UPDATE MenuItems SET StockQuantity = 0 WHERE StockQuantity IS NULL;
-        `);
+                ('Latté', 28.00, 'Coffee', 'Classic espresso with steamed milk', 50),
+                ('Americano', 22.00, 'Coffee', 'Espresso with hot water', 50),
+                ('Cappuccino', 28.00, 'Coffee', 'Espresso with steamed milk foam', 50),
+                ('Mocha', 32.00, 'Coffee', 'Espresso with chocolate and milk', 50),
+                ('Flat White', 30.00, 'Coffee', 'Double espresso with silky microfoam milk', 50)
+            `);
+        }
+        
+        await pool.query("INSERT IGNORE INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('extra_tip', '', 0)");
+        await pool.query("INSERT IGNORE INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('redirect_url', '', 0)");
+        await pool.query("INSERT IGNORE INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('refresh_interval', '30', 1)");
+        await pool.query("INSERT IGNORE INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_sessions_enabled', '1', 0)");
+        await pool.query("INSERT IGNORE INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES ('business_sessions_list', '[]', 1)");
 
-        console.log('Database initialization completed.');
+        await pool.query('UPDATE MenuItems SET StockQuantity = 0 WHERE StockQuantity IS NULL');
 
         console.log('Database initialization completed.');
     } catch (err) {
@@ -133,8 +105,8 @@ const adminAuth = (req, res, next) => {
 app.get('/api/menu', async (req, res) => {
     try {
         const pool = await getPool();
-        const result = await pool.request().query('SELECT * FROM MenuItems WHERE IsAvailable = 1');
-        res.json(result.recordset);
+        const [rows] = await pool.query('SELECT * FROM MenuItems WHERE IsAvailable = 1');
+        res.json(rows);
     } catch (err) {
         console.error('API Error /api/menu:', err);
         res.status(500).json({ error: err.message || 'Unknown database error' });
@@ -148,9 +120,9 @@ app.post('/api/orders', async (req, res) => {
         const pool = await getPool();
 
         // Check Business Status
-        const settingsResult = await pool.request().query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey LIKE 'business_%'");
+        const [settingsRows] = await pool.query("SELECT SettingKey, SettingValue, IsEnabled FROM SystemSettings WHERE SettingKey LIKE 'business_%'");
         const settings = {};
-        settingsResult.recordset.forEach(s => settings[s.SettingKey] = s);
+        settingsRows.forEach(s => settings[s.SettingKey] = s);
 
         const now = new Date();
         let isClosed = false;
@@ -165,8 +137,6 @@ app.post('/api/orders', async (req, res) => {
 
             const isOpenSession = sessions.some(s => {
                 if (!s.start || !s.end) return false;
-                // html datetime-local inputs are "YYYY-MM-DDTHH:mm". 
-                // We append "+08:00" to ensure they are interpreted as China Time regardless of server locale.
                 const start = new Date(s.start + ":00+08:00");
                 const end = new Date(s.end + ":00+08:00");
                 return now >= start && now <= end;
@@ -179,73 +149,54 @@ app.post('/api/orders', async (req, res) => {
             return res.status(403).send(reason);
         }
 
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
         try {
-            const request = new sql.Request(transaction);
-
             // 1. Pre-check all items stock
             for (const item of items) {
-                const stockCheckResult = await request
-                    .input(`item_id_chk_${item.id}`, sql.Int, item.id)
-                    .query(`SELECT StockQuantity, Name FROM MenuItems WHERE Id = @item_id_chk_${item.id}`);
+                const [stockCheckResult] = await connection.execute('SELECT StockQuantity, Name FROM MenuItems WHERE Id = ?', [item.id]);
                 
-                const dbItem = stockCheckResult.recordset[0];
+                const dbItem = stockCheckResult[0];
                 if (!dbItem || dbItem.StockQuantity < item.quantity) {
                     throw new Error(`库存不足: ${dbItem ? dbItem.Name : '未知商品'} (剩余: ${dbItem ? dbItem.StockQuantity : 0})`);
                 }
             }
 
             // 2. Generate Automatic Order Number (C001 format)
-            // Calculate China Midnight (UTC+8)
             const chinaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (8 * 3600000));
             const y = chinaTime.getFullYear(), m = chinaTime.getMonth(), d = chinaTime.getDate();
             const todayStart = new Date(Date.UTC(y, m, d, 0, 0, 0) - (8 * 3600000));
             
-            const countResult = await request
-                .input('todayStart', sql.DateTime, todayStart)
-                .query("SELECT COUNT(*) as count FROM Orders WHERE OrderDate >= @todayStart AND CustomerName LIKE 'C%'");
-            const orderCount = countResult.recordset[0].count + 1;
+            const [countResult] = await connection.execute("SELECT COUNT(*) as count FROM Orders WHERE OrderDate >= ? AND CustomerName LIKE 'C%'", [todayStart]);
+            const orderCount = countResult[0].count + 1;
             const orderNumber = `C${orderCount.toString().padStart(3, '0')}`;
 
             // 3. Create the Order
-            const orderResult = await request
-                .input('code', sql.NVarChar, orderNumber)
-                .input('totalPrice', sql.Decimal(10, 2), totalPrice)
-                .query('INSERT INTO Orders (CustomerName, TotalPrice, Status) OUTPUT INSERTED.Id VALUES (@code, @totalPrice, \'Pending\')');
+            const [orderResult] = await connection.execute('INSERT INTO Orders (CustomerName, TotalPrice, Status) VALUES (?, ?, ?)', [orderNumber, totalPrice, 'Pending']);
 
-            const orderId = orderResult.recordset[0].Id;
+            const orderId = orderResult.insertId;
 
             // 4. Process each item: Insert and Deduct Stock Atomically
             for (const item of items) {
-                const itemRequest = new sql.Request(transaction);
-                
                 // Atomically deduct stock and check result
-                const updateStockResult = await itemRequest
-                    .input('dec_id', sql.Int, item.id)
-                    .input('dec_qty', sql.Int, item.quantity)
-                    .query('UPDATE MenuItems SET StockQuantity = StockQuantity - @dec_qty WHERE Id = @dec_id AND StockQuantity >= @dec_qty');
+                const [updateStockResult] = await connection.execute('UPDATE MenuItems SET StockQuantity = StockQuantity - ? WHERE Id = ? AND StockQuantity >= ?', [item.quantity, item.id, item.quantity]);
                 
-                if (updateStockResult.rowsAffected[0] === 0) {
+                if (updateStockResult.affectedRows === 0) {
                     throw new Error(`下单失败: 商品库存已被抢光或不存在`);
                 }
 
                 // Insert OrderItem
-                await itemRequest
-                    .input('orderId', sql.Int, orderId)
-                    .input('menuItemId', sql.Int, item.id)
-                    .input('quantity', sql.Int, item.quantity)
-                    .input('price', sql.Decimal(10, 2), item.price)
-                    .input('selectedOptions', sql.NVarChar, item.selectedOptions || '')
-                    .query('INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, Price, SelectedOptions) VALUES (@orderId, @menuItemId, @quantity, @price, @selectedOptions)');
+                await connection.execute('INSERT INTO OrderItems (OrderId, MenuItemId, Quantity, Price, SelectedOptions) VALUES (?, ?, ?, ?, ?)', [orderId, item.id, item.quantity, item.price, item.selectedOptions || '']);
             }
 
-            await transaction.commit();
+            await connection.commit();
             res.status(201).json({ orderId, orderNumber });
         } catch (err) {
-            await transaction.rollback();
+            await connection.rollback();
             throw err;
+        } finally {
+            connection.release();
         }
     } catch (err) {
         res.status(400).send(err.message);
@@ -256,18 +207,18 @@ app.post('/api/orders', async (req, res) => {
 app.get('/api/orders', adminAuth, async (req, res) => {
     try {
         const pool = await getPool();
-        const result = await pool.request().query(`
+        const [rows] = await pool.query(`
             SELECT o.Id, o.CustomerName, o.OrderDate, o.Status, o.TotalPrice,
-            (SELECT String_Agg(mi.Name + 
-                CASE WHEN ISNULL(oi.SelectedOptions, '') = '' THEN '' ELSE ' (' + oi.SelectedOptions + ')' END +
-                ' x' + Cast(oi.Quantity as varchar), ', ') 
+            (SELECT GROUP_CONCAT(CONCAT(mi.Name, 
+                CASE WHEN IFNULL(oi.SelectedOptions, '') = '' THEN '' ELSE CONCAT(' (', oi.SelectedOptions, ')') END,
+                ' x', oi.Quantity) SEPARATOR ', ')
              FROM OrderItems oi 
              JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
              WHERE oi.OrderId = o.Id) as ItemSummary
             FROM Orders o
             ORDER BY o.OrderDate DESC
         `);
-        res.json(result.recordset);
+        res.json(rows);
     } catch (err) {
         res.status(500).send(err.message);
     }
@@ -279,33 +230,30 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
     const { status } = req.body;
     try {
         const pool = await getPool();
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
         try {
-            const request = new sql.Request(transaction);
-
             // Get current status and items if we are cancelling
-            const currentOrder = await request.input('oid', sql.Int, id).query('SELECT Status FROM Orders WHERE Id = @oid');
-            const oldStatus = currentOrder.recordset[0]?.Status;
+            const [currentOrder] = await connection.execute('SELECT Status FROM Orders WHERE Id = ?', [id]);
+            const oldStatus = currentOrder[0]?.Status;
 
-            await request
-                .input('id', sql.Int, id)
-                .input('status', sql.NVarChar, status)
-                .query('UPDATE Orders SET Status = @status WHERE Id = @id');
+            await connection.execute('UPDATE Orders SET Status = ? WHERE Id = ?', [status, id]);
             
             // If transition to Cancelled from something else, return stock
             if (status === 'Cancelled' && oldStatus !== 'Cancelled') {
-                const items = await request.query(`SELECT MenuItemId, Quantity FROM OrderItems WHERE OrderId = ${id}`);
-                for (const item of items.recordset) {
-                    await request.query(`UPDATE MenuItems SET StockQuantity = StockQuantity + ${item.Quantity} WHERE Id = ${item.MenuItemId}`);
+                const [items] = await connection.execute('SELECT MenuItemId, Quantity FROM OrderItems WHERE OrderId = ?', [id]);
+                for (const item of items) {
+                    await connection.execute('UPDATE MenuItems SET StockQuantity = StockQuantity + ? WHERE Id = ?', [item.Quantity, item.MenuItemId]);
                 }
             }
 
-            await transaction.commit();
+            await connection.commit();
             res.send('Order status updated');
         } catch (err) {
-            await transaction.rollback();
+            await connection.rollback();
             throw err;
+        } finally {
+            connection.release();
         }
     } catch (err) {
         res.status(500).send(err.message);
@@ -316,11 +264,11 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
 app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
     try {
         const pool = await getPool();
-        const result = await pool.request().query(`
+        const [rows] = await pool.query(`
             SELECT o.Id, o.OrderDate, o.CustomerName, o.Status, o.TotalPrice,
-            (SELECT String_Agg(mi.Name + 
-                CASE WHEN ISNULL(oi.SelectedOptions, '') = '' THEN '' ELSE ' (' + oi.SelectedOptions + ')' END +
-                ' x' + Cast(oi.Quantity as varchar), '; ') 
+            (SELECT GROUP_CONCAT(CONCAT(mi.Name, 
+                CASE WHEN IFNULL(oi.SelectedOptions, '') = '' THEN '' ELSE CONCAT(' (', oi.SelectedOptions, ')') END,
+                ' x', oi.Quantity) SEPARATOR '; ')
              FROM OrderItems oi 
              JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
              WHERE oi.OrderId = o.Id) as Items
@@ -329,7 +277,7 @@ app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
         `);
         
         let csv = 'ID,Date,Code,Items,Total,Status\n';
-        result.recordset.forEach(row => {
+        rows.forEach(row => {
             csv += `${row.Id},${row.OrderDate.toISOString()},"${row.CustomerName}","${row.Items}",${row.TotalPrice},${row.Status}\n`;
         });
         
@@ -345,16 +293,18 @@ app.get('/api/admin/orders/export', adminAuth, async (req, res) => {
 app.delete('/api/admin/orders', adminAuth, async (req, res) => {
     try {
         const pool = await getPool();
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
         try {
-            await transaction.request().query('DELETE FROM OrderItems');
-            await transaction.request().query('DELETE FROM Orders');
-            await transaction.commit();
+            await connection.execute('DELETE FROM OrderItems');
+            await connection.execute('DELETE FROM Orders');
+            await connection.commit();
             res.send('All orders cleared');
         } catch (err) {
-            await transaction.rollback();
+            await connection.rollback();
             throw err;
+        } finally {
+            connection.release();
         }
     } catch (err) {
         res.status(500).send(err.message);
@@ -366,29 +316,28 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
     const { id } = req.params;
     try {
         const pool = await getPool();
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
         try {
-            const request = new sql.Request(transaction);
-            const result = await request
-                .input('id', sql.Int, id)
-                .query('UPDATE Orders SET Status = \'Cancelled\' WHERE Id = @id AND Status = \'Pending\'');
+            const [result] = await connection.execute('UPDATE Orders SET Status = ? WHERE Id = ? AND Status = ?', ['Cancelled', id, 'Pending']);
             
-            if (result.rowsAffected[0] > 0) {
+            if (result.affectedRows > 0) {
                 // Return stock
-                const items = await request.query(`SELECT MenuItemId, Quantity FROM OrderItems WHERE OrderId = ${id}`);
-                for (const item of items.recordset) {
-                    await request.query(`UPDATE MenuItems SET StockQuantity = StockQuantity + ${item.Quantity} WHERE Id = ${item.MenuItemId}`);
+                const [items] = await connection.execute('SELECT MenuItemId, Quantity FROM OrderItems WHERE OrderId = ?', [id]);
+                for (const item of items) {
+                    await connection.execute('UPDATE MenuItems SET StockQuantity = StockQuantity + ? WHERE Id = ?', [item.Quantity, item.MenuItemId]);
                 }
-                await transaction.commit();
+                await connection.commit();
                 res.send('Order cancelled');
             } else {
-                await transaction.rollback();
+                await connection.rollback();
                 res.status(400).send('Order cannot be cancelled (might not be pending)');
             }
         } catch (err) {
-            await transaction.rollback();
+            await connection.rollback();
             throw err;
+        } finally {
+            connection.release();
         }
     } catch (err) {
         res.status(500).send(err.message);
@@ -401,21 +350,19 @@ app.get('/api/public/orders', async (req, res) => {
     if (!code) return res.status(400).send('Missing code');
     try {
         const pool = await getPool();
-        const result = await pool.request()
-            .input('code', sql.NVarChar, code)
-            .query(`
+        const [rows] = await pool.query(`
                 SELECT o.Id, o.OrderDate, o.Status, o.TotalPrice,
-                (SELECT String_Agg(mi.Name + 
-                    CASE WHEN ISNULL(oi.SelectedOptions, '') = '' THEN '' ELSE ' (' + oi.SelectedOptions + ')' END +
-                    ' x' + Cast(oi.Quantity as varchar), ', ') 
+                (SELECT GROUP_CONCAT(CONCAT(mi.Name, 
+                    CASE WHEN IFNULL(oi.SelectedOptions, '') = '' THEN '' ELSE CONCAT(' (', oi.SelectedOptions, ')') END,
+                    ' x', oi.Quantity) SEPARATOR ', ')
                  FROM OrderItems oi 
                  JOIN MenuItems mi ON oi.MenuItemId = mi.Id 
                  WHERE oi.OrderId = o.Id) as ItemSummary
                 FROM Orders o
-                WHERE o.CustomerName = @code
+                WHERE o.CustomerName = ?
                 ORDER BY o.OrderDate DESC
-            `);
-        res.json(result.recordset);
+            `, [code]);
+        res.json(rows);
     } catch (err) {
         res.status(500).send(err.message);
     }
@@ -427,8 +374,8 @@ app.get('/api/public/orders', async (req, res) => {
 app.get('/api/admin/menu', adminAuth, async (req, res) => {
     try {
         const pool = await getPool();
-        const result = await pool.request().query('SELECT * FROM MenuItems');
-        res.json(result.recordset);
+        const [rows] = await pool.query('SELECT * FROM MenuItems');
+        res.json(rows);
     } catch (err) {
         res.status(500).send(err.message);
     }
@@ -439,14 +386,8 @@ app.post('/api/admin/menu', adminAuth, async (req, res) => {
     const { name, price, description, category, stockQuantity, customOptions } = req.body;
     try {
         const pool = await getPool();
-        await pool.request()
-            .input('name', sql.NVarChar, name)
-            .input('price', sql.Decimal(10, 2), price)
-            .input('description', sql.NVarChar, description)
-            .input('category', sql.NVarChar, category)
-            .input('stockQuantity', sql.Int, stockQuantity || 0)
-            .input('customOptions', sql.NVarChar, customOptions || '')
-            .query('INSERT INTO MenuItems (Name, Price, Description, Category, StockQuantity, CustomOptions) VALUES (@name, @price, @description, @category, @stockQuantity, @customOptions)');
+        await pool.execute('INSERT INTO MenuItems (Name, Price, Description, Category, StockQuantity, CustomOptions) VALUES (?, ?, ?, ?, ?, ?)', 
+            [name, price, description, category, stockQuantity || 0, customOptions || '']);
         res.status(201).send('Item added');
     } catch (err) {
         res.status(500).send(err.message);
@@ -459,16 +400,8 @@ app.put('/api/admin/menu/:id', adminAuth, async (req, res) => {
     const { name, price, description, category, isAvailable, stockQuantity, customOptions } = req.body;
     try {
         const pool = await getPool();
-        await pool.request()
-            .input('id', sql.Int, id)
-            .input('name', sql.NVarChar, name)
-            .input('price', sql.Decimal(10, 2), price)
-            .input('description', sql.NVarChar, description || '')
-            .input('category', sql.NVarChar, category || 'Coffee')
-            .input('isAvailable', sql.Bit, isAvailable)
-            .input('stockQuantity', sql.Int, stockQuantity)
-            .input('customOptions', sql.NVarChar, customOptions || '')
-            .query('UPDATE MenuItems SET Name = @name, Price = @price, Description = @description, Category = @category, IsAvailable = @isAvailable, StockQuantity = @stockQuantity, CustomOptions = @customOptions WHERE Id = @id');
+        await pool.execute('UPDATE MenuItems SET Name = ?, Price = ?, Description = ?, Category = ?, IsAvailable = ?, StockQuantity = ?, CustomOptions = ? WHERE Id = ?',
+            [name, price, description || '', category || 'Coffee', isAvailable ? 1 : 0, stockQuantity, customOptions || '', id]);
         res.send('Item updated');
     } catch (err) {
         res.status(500).send(err.message);
@@ -480,9 +413,7 @@ app.delete('/api/admin/menu/:id', adminAuth, async (req, res) => {
     const { id } = req.params;
     try {
         const pool = await getPool();
-        await pool.request()
-            .input('id', sql.Int, id)
-            .query('DELETE FROM MenuItems WHERE Id = @id');
+        await pool.execute('DELETE FROM MenuItems WHERE Id = ?', [id]);
         res.send('Item deleted');
     } catch (err) {
         res.status(500).send(err.message);
@@ -495,8 +426,8 @@ app.delete('/api/admin/menu/:id', adminAuth, async (req, res) => {
 app.get('/api/settings', async (req, res) => {
     try {
         const pool = await getPool();
-        const result = await pool.request().query('SELECT * FROM SystemSettings');
-        res.json(result.recordset);
+        const [rows] = await pool.query('SELECT * FROM SystemSettings');
+        res.json(rows);
     } catch (err) {
         console.error('API Error /api/settings:', err);
         res.status(500).json({ error: err.message });
@@ -509,20 +440,11 @@ app.put('/api/admin/settings', adminAuth, async (req, res) => {
     try {
         const pool = await getPool();
         for (const s of settings) {
-            await pool.request()
-                .input('key', sql.NVarChar, s.SettingKey)
-                .input('value', sql.NVarChar, s.SettingValue)
-                .input('enabled', sql.Bit, s.IsEnabled)
-                .query(`
-                    IF EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = @key)
-                    BEGIN
-                        UPDATE SystemSettings SET SettingValue = @value, IsEnabled = @enabled WHERE SettingKey = @key
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) VALUES (@key, @value, @enabled)
-                    END
-                `);
+            await pool.execute(`
+                INSERT INTO SystemSettings (SettingKey, SettingValue, IsEnabled) 
+                VALUES (?, ?, ?) 
+                ON DUPLICATE KEY UPDATE SettingValue = VALUES(SettingValue), IsEnabled = VALUES(IsEnabled)
+            `, [s.SettingKey, s.SettingValue, s.IsEnabled ? 1 : 0]);
         }
         res.send('Settings updated');
     } catch (err) {
