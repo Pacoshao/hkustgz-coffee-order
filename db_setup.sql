@@ -7,23 +7,21 @@ CREATE TABLE MenuItems (
     Category VARCHAR(50),
     IsAvailable BOOLEAN DEFAULT 1,
     StockQuantity INT DEFAULT 0,
-    CustomOptions TEXT
+    CustomOptions TEXT,
+    INDEX idx_category (Category),
+    INDEX idx_available (IsAvailable)
 );
-
-CREATE INDEX idx_category ON MenuItems (Category);
-CREATE INDEX idx_available ON MenuItems (IsAvailable);
 
 -- Create Orders table
 CREATE TABLE Orders (
     Id INT PRIMARY KEY AUTO_INCREMENT,
     OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
-    Status VARCHAR(20) DEFAULT 'Pending', -- Pending, Completed, Cancelled
+    Status VARCHAR(20) DEFAULT 'Pending',
     TotalPrice DECIMAL(10, 2) NOT NULL,
-    CustomerName VARCHAR(100)
+    CustomerName VARCHAR(100),
+    INDEX idx_order_date (OrderDate),
+    INDEX idx_status (Status)
 );
-
-CREATE INDEX idx_order_date ON Orders (OrderDate);
-CREATE INDEX idx_status ON Orders (Status);
 
 -- Create OrderItems table
 CREATE TABLE OrderItems (

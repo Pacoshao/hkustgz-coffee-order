@@ -315,7 +315,7 @@
                         <h3>${item.Name}</h3>
                         <p>${item.Description || ''}</p>
                         ${item.CustomOptions ? `<p style="font-size: 0.75em; color: #888;">${item.CustomOptions.replace(/\|/g, ' ')}</p>` : ''}
-                        <p class="price">¥${item.Price.toFixed(2)}</p>
+                        <p class="price">¥${Number(item.Price).toFixed(2)}</p>
                         <p style="font-size: 0.8em; color: ${effectiveStock > 0 ? '#666' : 'red'}">
                             ${effectiveStock > 0 ? `${t('stock_left')}: ${effectiveStock}` : t('out_of_stock')}
                         </p>
@@ -420,13 +420,13 @@
                     <div>
                         <div style="font-weight: 500;">${item.Name} x ${item.quantity}</div>
                         ${item.selectedOptions ? `<div style="font-size: 11px; color: #666;">${item.selectedOptions}</div>` : ''}
-                        <div style="font-size: 12px; color: #0071e3;">¥${(item.Price * item.quantity).toFixed(2)}</div>
+                        <div style="font-size: 12px; color: #0071e3;">¥${(Number(item.Price) * item.quantity).toFixed(2)}</div>
                     </div>
                     <button onclick="removeFromCart(${index})" style="background: #ff3b30; color: white; padding: 4px 8px; font-size: 11px; border-radius: 4px;">${t('remove')}</button>
                 </div>
             `).join('');
             
-            const total = cart.reduce((sum, item) => sum + (item.Price * item.quantity), 0);
+            const total = cart.reduce((sum, item) => sum + (Number(item.Price) * item.quantity), 0);
             totalSpan.innerText = total.toFixed(2);
         }
 
@@ -496,7 +496,7 @@
                         </div>
                         <div style="color:#444; margin-bottom:5px">${t('items')}: ${o.ItemSummary}</div>
                         <div style="display:flex; justify-content:space-between; align-items:center">
-                            <span style="color:#0071e3; font-weight:bold">¥${o.TotalPrice.toFixed(2)}</span>
+                            <span style="color:#0071e3; font-weight:bold">¥${Number(o.TotalPrice).toFixed(2)}</span>
                             ${o.Status === 'Pending' ? `<button onclick="userCancelOrder(${o.Id})" style="background:#ff3b30; color:white; padding:4px 8px; font-size:11px; border:none; border-radius:4px; cursor:pointer;">${t('cancel')}</button>` : ''}
                         </div>
                     </div>
