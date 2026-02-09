@@ -452,7 +452,7 @@
                     alert(`${t('order_success')} ${data.orderNumber}`);
                     
                     document.getElementById('search-code').value = data.orderNumber;
-                    localStorage.setItem('coffee_order_number', data.orderNumber);
+                    localStorage.setItem('hk_order_num', data.orderNumber);
                     
                     cart = [];
                     updateCart();
@@ -476,7 +476,7 @@
         async function fetchMyOrdersByCode() {
             const code = document.getElementById('search-code').value.trim();
             if (!code) return;
-            localStorage.setItem('coffee_order_number', code);
+            localStorage.setItem('hk_order_num', code);
             
             const listDiv = document.getElementById('my-orders-list');
             try {
@@ -522,7 +522,7 @@
         }
 
         // Initialize
-        const savedNumber = localStorage.getItem('coffee_order_number');
+        const savedNumber = localStorage.getItem('hk_order_num');
         if (savedNumber) {
             document.getElementById('search-code').value = savedNumber;
             fetchMyOrdersByCode();
@@ -531,7 +531,7 @@
         updateUI();
         fetchMenu();
         fetchSettings();
-        setInterval(fetchMenu, 30000);
+        setInterval(fetchMenu, 30 * 1000);
     </script>
     <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
         <a href="https://github.com/Pacoshao" target="_blank" style="text-decoration: none; color: #666; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; transition: all 0.3s;">
