@@ -1,6 +1,6 @@
 # HKUST(GZ) Coffee Order System | 港科大（广州）咖啡点单系统
 
-[![GitHub license](https://img.shields.io/github/license/Pacoshao/hkustgz-coffee-order)](https://github.com/Pacoshao/hkustgz-coffee-order/blob/main/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/Pacoshao/hkustgz-coffee-order)](https://github.com/Pacoshao/hkustgz-coffee-order/blob/netlify/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Pacoshao/hkustgz-coffee-order)](https://github.com/Pacoshao/hkustgz-coffee-order/stargazers)
 
 这是一个为香港科技大学（广州）设计的轻量级咖啡在线点单系统。系统支持顾客端自助下单、订单查询，以及管理端进行订单处理和菜单管理。
